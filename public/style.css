@@ -129,24 +129,27 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .table-oval {
   grid-column: 2; grid-row: 2;
   background: radial-gradient(ellipse at center, var(--felt) 60%, var(--felt-dark) 100%);
-  border-radius: 50% / 40%;
-  border: 8px solid #7a4a1f;
+  border-radius: 16px;
+  border: 6px solid #7a4a1f;
   min-height: 220px;
   min-width: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 16px; position: relative;
+  max-height: 60vh;
+  display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
+  padding: 16px; position: relative; overflow: auto;
 }
 
 .turn-indicator {
   color: var(--accent); font-weight: 700; font-size: 15px;
-  min-height: 20px; text-align: center; margin: 10px 0;
+  min-height: 20px; text-align: center; margin: 0 0 10px; width: 100%;
 }
 .turn-indicator.warn { color: #ff6b6b; }
 
 .board {
-  display: flex; align-items: center; gap: 4px; padding: 8px; overflow-x: auto;
-  max-width: 100%;
+  position: relative;
+  width: 100%;
+  min-height: 40px;
 }
+.board-tile { position: absolute; }
 
 .domino-tile {
   display: flex; background: #fdfdfa; border: 1.5px solid #222; border-radius: 6px;

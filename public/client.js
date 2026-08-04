@@ -287,6 +287,45 @@
       return av;
     }
 
+    function renderSnakeBoard(boardEntries) {
+      els.board.innerHTML = '';
+      if (boardEntries.length === 0) {
+        els.board.style.height = '40px';
+        return;
+      }
+
+      const CELL_W = 34;
+      const CELL_H = 70;
+      const containerWidth = els.board.clientWidth || 320;
+      const cols = Math.max(4, Math.floor(containerWidth / CELL_W));
+
+      let row = 0;
+      let col = 0;
+      let dir = 1;
+      let prevRow = 0;
+
+      boardEntries.forEach((entry, i) => {
+        const isTurn = i > 0 && prevRow !== row;
+        prevRow = row;
+
+        const el = makeTileEl(entry.tile, isTurn);
+        el.classList.add('board-tile');
+        el.style.left = `${col * CELL_W}px`;
+        el.style.top = `${row * CELL_H}px`;
+        els.board.appendChild(el);
+
+        const nextCol = col + dir;
+        if (nextCol < 0 || nextCol >= cols) {
+          row += 1;
+          dir = -dir;
+        } else {
+          col = nextCol;
+        }
+      });
+
+      els.board.style.height = `${(row + 1) * CELL_H}px`;
+    }
+
     function renderOpponentSeat(container, s) {
       container.innerHTML = '';
       container.classList.toggle('empty', !s.name);
@@ -354,9 +393,8 @@
         elx.classList.toggle('turn', !!(s && state.turnSeat === s.idx));
       });
 
-      // Ban co giua ban
-      els.board.innerHTML = '';
-      state.board.forEach((entry) => els.board.appendChild(makeTileEl(entry.tile, false)));
+      // Ban co giua ban - xep kieu ran, chi re huong khi het cho ngang, uu tien ve het quan
+      renderSnakeBoard(state.board);
 
       // Chi bao luot (dem nguoc duoc noi them boi startCountdownFor)
       if (state.status === 'match-over') {
