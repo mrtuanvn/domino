@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Domino Online</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<div id="lobby-view" class="view">
+  <div class="card">
+    <h1>Domino Online</h1>
+    <p class="sub">Choi 4 nguoi (co the ghep Bot) - kieu Mien Nam, 28 quan.</p>
+
+    <form id="create-form">
+      <label>Kieu choi</label>
+      <div class="radio-row">
+        <label><input type="radio" name="mode" value="block" checked /> Kieu chan (an thua tung van)</label>
+        <label><input type="radio" name="mode" value="score" /> Kieu tinh diem (cong don)</label>
+      </div>
+
+      <div id="matchWins-field" class="field">
+        <label for="matchWins">So van thang de thang chung cuoc</label>
+        <input type="number" id="matchWins" value="3" min="1" max="20" />
+      </div>
+
+      <div id="targetScore-field" class="field" style="display:none">
+        <label for="targetScore">Diem de thang chung cuoc</label>
+        <input type="number" id="targetScore" value="100" min="10" max="1000" />
+      </div>
+
+      <button type="submit">Tao phong moi</button>
+    </form>
+  </div>
+</div>
+
+<div id="room-view" class="view" style="display:none">
+  <header class="room-header">
+    <div>
+      <strong>Phong: <span id="room-code"></span></strong>
+      <button id="copy-link-btn" class="small-btn">Sao chep link moi</button>
+    </div>
+    <div id="scoreboard" class="scoreboard"></div>
+  </header>
+
+  <section id="seats" class="seats"></section>
+
+  <div id="lobby-actions" class="lobby-actions" style="display:none">
+    <button id="start-btn">Bat dau (ghe trong se duoc Bot thay)</button>
+  </div>
+
+  <section id="board-area" class="board-area" style="display:none">
+    <div id="turn-indicator" class="turn-indicator"></div>
+    <div id="board" class="board"></div>
+
+    <div id="result-overlay" class="result-overlay" style="display:none">
+      <div class="result-box">
+        <p id="result-text"></p>
+        <button id="rematch-btn" style="display:none">Choi lai</button>
+      </div>
+    </div>
+
+    <div id="hand-area" class="hand-area">
+      <div id="hand" class="hand"></div>
+      <button id="pass-btn" style="display:none">Bo luot</button>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" style="display:none"></div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/client.js"></script>
+</body>
+</html>
