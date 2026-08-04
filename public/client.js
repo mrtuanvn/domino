@@ -294,10 +294,13 @@
         return;
       }
 
-      const CELL_W = 34;
-      const CELL_H = 70;
+      // Kich thuoc thuc te cua 1 quan (khop CSS: nua quan 26px + vien 1.5px*2)
+      const HORIZ_W = 55; // quan nam ngang: 2 nua canh nhau
+      const ROW_H = 55; // chieu cao 1 hang = chieu cao quan dung (de cho quan re khong bi de)
+      const TILE_THIN = 29; // be day quan (chieu cao quan nam / chieu rong quan dung)
+
       const containerWidth = els.board.clientWidth || 320;
-      const cols = Math.max(4, Math.floor(containerWidth / CELL_W));
+      const cols = Math.max(3, Math.floor(containerWidth / HORIZ_W));
 
       let row = 0;
       let col = 0;
@@ -310,8 +313,10 @@
 
         const el = makeTileEl(entry.tile, isTurn);
         el.classList.add('board-tile');
-        el.style.left = `${col * CELL_W}px`;
-        el.style.top = `${row * CELL_H}px`;
+        const top = row * ROW_H + (isTurn ? 0 : (TILE_THIN === ROW_H ? 0 : (ROW_H - TILE_THIN) / 2));
+        const left = isTurn ? col * HORIZ_W + (HORIZ_W - TILE_THIN) / 2 : col * HORIZ_W;
+        el.style.left = `${left}px`;
+        el.style.top = `${top}px`;
         els.board.appendChild(el);
 
         const nextCol = col + dir;
@@ -323,7 +328,8 @@
         }
       });
 
-      els.board.style.height = `${(row + 1) * CELL_H}px`;
+      els.board.style.height = `${(row + 1) * ROW_H}px`;
+      els.board.style.width = `${cols * HORIZ_W}px`;
     }
 
     function renderOpponentSeat(container, s) {
