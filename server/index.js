@@ -13,7 +13,7 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Tao phong moi, tra ve roomId de client dieu huong toi link moi.
+// Tạo phòng mới, trả về roomId để client điều hướng tới link mới.
 app.post('/api/rooms', (req, res) => {
   const { mode, targetScore, matchWins } = req.body || {};
   const room = rooms.createRoom({
@@ -24,7 +24,7 @@ app.post('/api/rooms', (req, res) => {
   res.json({ roomId: room.id });
 });
 
-// Link moi vao phong - tra ve SPA, client tu doc roomId tu URL.
+// Link mời vào phòng - trả về SPA, client tự đọc roomId từ URL.
 app.get('/r/:roomId', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
@@ -43,50 +43,74 @@ function broadcastRoom(roomId) {
 
 const BOT_MOVE_DELAY_MS = 700;
 const NEXT_ROUND_DELAY_MS = 3500;
+const TURN_TIME_MS = 20000;
 
-function tickBots(roomId) {
+function clearTurnTimer(room) {
+  if (room.turnTimer) {
+    clearTimeout(room.turnTimer);
+    room.turnTimer = null;
+  }
+}
+
+// Goi sau moi thay doi luot: xu ly vong lap bot, dem nguoc luot nguoi,
+// va tu dong chuyen sang van moi khi 1 van ket thuc.
+function afterTurnChange(roomId) {
   const room = rooms.getRoom(roomId);
   if (!room || !room.game) return;
+  clearTurnTimer(room);
 
   if (room.game.status === 'round-over') {
+    room.turnDeadline = null;
     broadcastRoom(roomId);
-    if (room.status === 'match-over') return; // cho nguoi choi bam "choi lai"
+    if (room.status === 'match-over') return; // cho nguoi choi bam "Choi lai"
     setTimeout(() => {
       const r2 = rooms.getRoom(roomId);
       if (!r2 || r2.status === 'match-over') return;
       game.startRound(r2);
       broadcastRoom(roomId);
-      tickBots(roomId);
+      afterTurnChange(roomId);
     }, NEXT_ROUND_DELAY_MS);
     return;
   }
 
   if (game.isBotTurn(room)) {
+    room.turnDeadline = null;
+    broadcastRoom(roomId);
     setTimeout(() => {
       const r2 = rooms.getRoom(roomId);
       if (!r2 || !r2.game || r2.game.status !== 'playing') {
-        tickBots(roomId);
+        afterTurnChange(roomId);
         return;
       }
       game.botAutoMove(r2);
       broadcastRoom(roomId);
-      tickBots(roomId);
+      afterTurnChange(roomId);
     }, BOT_MOVE_DELAY_MS);
-  } else {
-    broadcastRoom(roomId);
+    return;
   }
+
+  // Den luot nguoi that - bat dong ho dem nguoc, het gio thi may tu danh thay.
+  room.turnDeadline = Date.now() + TURN_TIME_MS;
+  broadcastRoom(roomId);
+  room.turnTimer = setTimeout(() => {
+    const r2 = rooms.getRoom(roomId);
+    if (!r2 || !r2.game || r2.game.status !== 'playing') return;
+    game.botAutoMove(r2); // het gio - may tu danh thay nguoi choi
+    broadcastRoom(roomId);
+    afterTurnChange(roomId);
+  }, TURN_TIME_MS);
 }
 
 io.on('connection', (socket) => {
   socket.on('join', ({ roomId, token, name }) => {
     const room = rooms.getRoom(roomId);
     if (!room) {
-      socket.emit('errorMsg', 'Khong tim thay phong.');
+      socket.emit('errorMsg', 'Không tìm thấy phòng.');
       return;
     }
     const seatIdx = rooms.joinRoom(room, token, name);
     if (seatIdx === -1) {
-      socket.emit('errorMsg', 'Phong da du 4 nguoi.');
+      socket.emit('errorMsg', 'Phòng đã đủ 4 người.');
       return;
     }
     socket.data.token = token;
@@ -107,7 +131,7 @@ io.on('connection', (socket) => {
     room.status = 'playing';
     game.startRound(room);
     broadcastRoom(roomId);
-    tickBots(roomId);
+    afterTurnChange(roomId);
   });
 
   socket.on('play', (move) => {
@@ -120,10 +144,10 @@ io.on('connection', (socket) => {
     const result = game.playTile(room, seat, move);
     if (!result.ok) {
       socket.emit('errorMsg', result.error);
-      return;
+      return; // khong dung gio - de dong ho dem nguoc hien tai tiep tuc chay
     }
     broadcastRoom(roomId);
-    tickBots(roomId);
+    afterTurnChange(roomId);
   });
 
   socket.on('pass', () => {
@@ -139,7 +163,7 @@ io.on('connection', (socket) => {
       return;
     }
     broadcastRoom(roomId);
-    tickBots(roomId);
+    afterTurnChange(roomId);
   });
 
   socket.on('rematch', () => {
@@ -153,7 +177,7 @@ io.on('connection', (socket) => {
     room.status = 'playing';
     game.startRound(room);
     broadcastRoom(roomId);
-    tickBots(roomId);
+    afterTurnChange(roomId);
   });
 
   socket.on('disconnect', () => {
@@ -168,5 +192,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Domino server dang chay tai http://localhost:${PORT}`);
+  console.log(`Domino server đang chạy tại http://localhost:${PORT}`);
 });

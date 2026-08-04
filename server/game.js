@@ -88,13 +88,13 @@ function finishRound(room, result) {
 // Nguoi choi (human) yeu cau danh 1 quan. move: { handIndex, side }
 function playTile(room, seat, move) {
   const game = room.game;
-  if (!game || game.status !== 'playing') return { ok: false, error: 'Van choi chua san sang' };
-  if (game.turnSeat !== seat) return { ok: false, error: 'Chua den luot ban' };
+  if (!game || game.status !== 'playing') return { ok: false, error: 'Ván chơi chưa sẵn sàng' };
+  if (game.turnSeat !== seat) return { ok: false, error: 'Chưa đến lượt bạn' };
 
   const hand = game.hands[seat];
   const validMoves = engine.getValidMoves(hand, game.ends);
   const chosen = validMoves.find((m) => m.handIndex === move.handIndex && m.side === move.side);
-  if (!chosen) return { ok: false, error: 'Nuoc di khong hop le' };
+  if (!chosen) return { ok: false, error: 'Nước đi không hợp lệ' };
 
   applyPlayInternal(room, seat, chosen);
   return { ok: true };
@@ -102,12 +102,12 @@ function playTile(room, seat, move) {
 
 function passTurn(room, seat) {
   const game = room.game;
-  if (!game || game.status !== 'playing') return { ok: false, error: 'Van choi chua san sang' };
-  if (game.turnSeat !== seat) return { ok: false, error: 'Chua den luot ban' };
+  if (!game || game.status !== 'playing') return { ok: false, error: 'Ván chơi chưa sẵn sàng' };
+  if (game.turnSeat !== seat) return { ok: false, error: 'Chưa đến lượt bạn' };
 
   const hand = game.hands[seat];
   const validMoves = engine.getValidMoves(hand, game.ends);
-  if (validMoves.length > 0) return { ok: false, error: 'Ban van con nuoc di, khong the bo luot' };
+  if (validMoves.length > 0) return { ok: false, error: 'Bạn vẫn còn nước đi, không thể bỏ lượt' };
 
   applyPassInternal(room, seat);
   return { ok: true };
@@ -168,6 +168,7 @@ function buildPublicState(room, viewerToken) {
     board: game ? game.board : [],
     ends: game ? game.ends : null,
     turnSeat: game ? game.turnSeat : null,
+    turnDeadline: room.turnDeadline || null,
     lastResult: game ? game.lastResult : null,
     history: game ? game.history.slice(-8) : [],
   };

@@ -11,26 +11,26 @@
 <div id="lobby-view" class="view">
   <div class="card">
     <h1>Domino Online</h1>
-    <p class="sub">Choi 4 nguoi (co the ghep Bot) - kieu Mien Nam, 28 quan.</p>
+    <p class="sub">Chơi 4 người (có thể ghép Bot) - kiểu Miền Nam, 28 quân.</p>
 
     <form id="create-form">
-      <label>Kieu choi</label>
+      <label>Kiểu chơi</label>
       <div class="radio-row">
-        <label><input type="radio" name="mode" value="block" checked /> Kieu chan (an thua tung van)</label>
-        <label><input type="radio" name="mode" value="score" /> Kieu tinh diem (cong don)</label>
+        <label><input type="radio" name="mode" value="block" checked /> Kiểu chặn (ăn thua từng ván)</label>
+        <label><input type="radio" name="mode" value="score" /> Kiểu tính điểm (cộng dồn)</label>
       </div>
 
       <div id="matchWins-field" class="field">
-        <label for="matchWins">So van thang de thang chung cuoc</label>
+        <label for="matchWins">Số ván thắng để thắng chung cuộc</label>
         <input type="number" id="matchWins" value="3" min="1" max="20" />
       </div>
 
       <div id="targetScore-field" class="field" style="display:none">
-        <label for="targetScore">Diem de thang chung cuoc</label>
+        <label for="targetScore">Điểm để thắng chung cuộc</label>
         <input type="number" id="targetScore" value="100" min="10" max="1000" />
       </div>
 
-      <button type="submit">Tao phong moi</button>
+      <button type="submit">Tạo phòng mới</button>
     </form>
   </div>
 </div>
@@ -38,32 +38,43 @@
 <div id="room-view" class="view" style="display:none">
   <header class="room-header">
     <div>
-      <strong>Phong: <span id="room-code"></span></strong>
-      <button id="copy-link-btn" class="small-btn">Sao chep link moi</button>
+      <strong>Phòng: <span id="room-code"></span></strong>
+      <button id="copy-link-btn" class="small-btn">Sao chép link mời</button>
     </div>
     <div id="scoreboard" class="scoreboard"></div>
+    <button id="sound-toggle" class="small-btn" title="Bật/tắt âm thanh">🔊</button>
   </header>
 
   <section id="seats" class="seats"></section>
 
   <div id="lobby-actions" class="lobby-actions" style="display:none">
-    <button id="start-btn">Bat dau (ghe trong se duoc Bot thay)</button>
+    <button id="start-btn">Bắt đầu (ghế trống sẽ được Bot thay)</button>
   </div>
 
   <section id="board-area" class="board-area" style="display:none">
-    <div id="turn-indicator" class="turn-indicator"></div>
-    <div id="board" class="board"></div>
+    <div class="table-wrap">
+      <div id="seat-top" class="seat-pos seat-top"></div>
+      <div id="seat-left" class="seat-pos seat-left"></div>
+      <div id="seat-right" class="seat-pos seat-right"></div>
 
-    <div id="result-overlay" class="result-overlay" style="display:none">
-      <div class="result-box">
-        <p id="result-text"></p>
-        <button id="rematch-btn" style="display:none">Choi lai</button>
+      <div id="table-oval" class="table-oval">
+        <div id="board" class="board"></div>
+      </div>
+
+      <div id="result-overlay" class="result-overlay" style="display:none">
+        <div class="result-box">
+          <p id="result-text"></p>
+          <button id="rematch-btn" style="display:none">Chơi lại</button>
+        </div>
       </div>
     </div>
 
+    <div id="turn-indicator" class="turn-indicator"></div>
+
     <div id="hand-area" class="hand-area">
+      <div id="your-seat-chip" class="your-seat-chip"></div>
       <div id="hand" class="hand"></div>
-      <button id="pass-btn" style="display:none">Bo luot</button>
+      <button id="pass-btn" style="display:none">Bỏ lượt</button>
     </div>
   </section>
 

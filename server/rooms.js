@@ -47,7 +47,7 @@ function joinRoom(room, token, name) {
   }
   const emptyIdx = room.seats.findIndex((s) => s === null);
   if (emptyIdx === -1) return -1; // phong day
-  room.seats[emptyIdx] = { token, name: name || `Nguoi choi ${emptyIdx + 1}`, type: 'human', connected: true };
+  room.seats[emptyIdx] = { token, name: name || `Người chơi ${emptyIdx + 1}`, type: 'human', connected: true };
   return emptyIdx;
 }
 
