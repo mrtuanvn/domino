@@ -368,6 +368,15 @@
       function tryPlace(tryDir) {
         const box = spiralBox(cursor, tryDir, long, thin);
         if (!inBounds(box) || boxOverlapsAny(box, rects)) return null;
+        // Khe con lai o canh ban theo huong di khong duoc nho hon 'thin' - neu khong quan
+        // sau se bi ket (khong du cho di thang tiep, cung khong du cho quẹo vuong goc) va
+        // tran thang ra ngoai ban mai. Tu choi som de thuat toan quẹo truoc khi bi ket.
+        let forwardLeftover;
+        if (tryDir === 0) forwardLeftover = boundsW - (box.x + box.w);
+        else if (tryDir === 2) forwardLeftover = box.x;
+        else if (tryDir === 1) forwardLeftover = boundsH - (box.y + box.h);
+        else forwardLeftover = box.y;
+        if (forwardLeftover > 0 && forwardLeftover < thin) return null;
         return box;
       }
 
