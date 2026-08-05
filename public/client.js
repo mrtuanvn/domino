@@ -358,15 +358,33 @@
       const rects = [];
       const positions = [];
       let blocked = false;
-      let straightRun = 0;
-      const MAX_STRAIGHT = 4; // quay som sau ~4 quan lien tiep cung 1 huong de xoan gon (quan to hon)
+      const NEAR_EDGE = long * 1.5; // con lai duoi 1.5 quan truoc mat thi moi coi la "gan bien"
 
       function inBounds(box) {
         return box.x >= 0 && box.y >= 0 && box.x + box.w <= boundsW && box.y + box.h <= boundsH;
       }
 
+      // Khoang cach con lai tu con tro toi bien ban theo huong dir - dung de biet chung nao
+      // moi thuc su "gan dung bien" (khong quay som khi con thua cho di thang).
+      function distToEdge(dir) {
+        if (dir === 0) return boundsW - cursor.x;
+        if (dir === 2) return cursor.x;
+        if (dir === 1) return boundsH - cursor.y;
+        return cursor.y;
+      }
+
       function tryPlace(tryDir) {
-        const box = spiralBox(cursor, tryDir, long, thin);
+        // Goc con tro mac dinh (flush-top/flush-left) tu chinh no khi quẹo tu huong Trai/Len
+        // sang Phai/Xuong - 2 cap nay se de quan moi chong len chinh quan vua xep (kiem tra
+        // toan hoc: ca 2 quan cung nam o "goc duong" cua con tro). Dich goc sang canh doi
+        // dien cua quan truoc de quan moi bam khop ma khong chong.
+        let anchor = cursor;
+        if (rects.length) {
+          const prevBox = rects[rects.length - 1];
+          if (dirIdx === 2 && tryDir === 1) anchor = { x: cursor.x, y: cursor.y + prevBox.h };
+          else if (dirIdx === 3 && tryDir === 0) anchor = { x: cursor.x + prevBox.w, y: cursor.y };
+        }
+        const box = spiralBox(anchor, tryDir, long, thin);
         if (!inBounds(box) || boxOverlapsAny(box, rects)) return null;
         // Khe con lai o canh ban theo huong di khong duoc nho hon 'thin' - neu khong quan
         // sau se bi ket (khong du cho di thang tiep, cung khong du cho quẹo vuong goc) va
@@ -383,7 +401,8 @@
       boardEntries.forEach((entry, idx) => {
         const isDouble = idx > 0 && entry.tile[0] === entry.tile[1];
         // Thu huong: double uu tien be VUONG GOC (90 do) so voi huong di - "con doi vẽ vuông
-        // góc" nhu yeu cau. Neu da di thang qua MAX_STRAIGHT, chu dong quay 90 do de xoan gon.
+        // góc" nhu yeu cau. Con lai chua toi NEAR_EDGE thi cu di thang (bam sat het chieu
+        // ngang/doc ban truoc), chi chu dong quay 90 do khi thuc su gan dung bien.
         // Khong bao gio quay dau 180 do (diem noi bi đào len).
         let startDir = dirIdx;
         if (isDouble) {
@@ -392,7 +411,7 @@
           if (tryPlace(d1)) startDir = d1;
           else if (tryPlace(d2)) startDir = d2;
           // neu ca 2 deu khong vua thi giu huong (dang o goc qu - de binh thuong)
-        } else if (straightRun >= MAX_STRAIGHT) {
+        } else if (distToEdge(dirIdx) < NEAR_EDGE) {
           const d1 = (dirIdx + 1) % 4;
           const d3 = (dirIdx + 3) % 4;
           if (tryPlace(d1)) startDir = d1;
@@ -414,8 +433,6 @@
           box = spiralBox(cursor, chosenDir, long, thin);
         }
 
-        if (chosenDir === dirIdx) straightRun += 1;
-        else straightRun = 0;
         dirIdx = chosenDir;
         let v1, v2;
         if (dirIdx === 2 || dirIdx === 3) { v1 = entry.right; v2 = entry.left; }
