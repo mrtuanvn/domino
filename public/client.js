@@ -318,30 +318,6 @@
       return av;
     }
 
-    // dirIdx theo chieu kim dong ho: 0=Phai, 1=Xuong, 2=Trai, 3=Len.
-    // Uu tien di trong khung ban (that) - cham bien thi be vuong goc; neu khong con huong
-    // nao vua khung thi van uu tien khong chong len nhanh da xep (an toan tuyet doi), va de
-    // buoc scale-to-fit o renderSnakeBoard xu ly phan con lai. Nho vay ban se cuon dan vao
-    // trong thanh xoan oc gan lap day hinh chu nhat, thay vi keo dai mai theo 1 huong.
-    function spiralBox(cursor, dirIdx, long, thin) {
-      const vertical = dirIdx === 1 || dirIdx === 3;
-      const w = vertical ? thin : long;
-      const h = vertical ? long : thin;
-      let x = cursor.x;
-      let y = cursor.y;
-      if (dirIdx === 2) x -= w; // Trai: quan noi ve phia trai diem cam
-      if (dirIdx === 3) y -= h; // Len: quan noi ve phia tren diem cam
-      return { x, y, w, h, vertical };
-    }
-
-    function boxOverlapsAny(box, rects) {
-      return rects.some((r) => {
-        const ox = Math.min(box.x + box.w, r.x + r.w) - Math.max(box.x, r.x);
-        const oy = Math.min(box.y + box.h, r.y + r.h) - Math.max(box.y, r.y);
-        return ox > 1 && oy > 1; // cham canh (0/1px) thi cho, chi chan noi that su
-      });
-    }
-
     // Don vi chuan de tinh layout (ty le that: dai gap ~1.9 lan day).
     const UNIT_LONG = 55;
     const UNIT_THIN = 29;
@@ -351,7 +327,26 @@
     // theo huong hien tai, quan doi be vuong goc (giong domino that). Cham bien khung HOAC cham
     // nhanh da xep truoc thi be vuong goc tiep - tu nhien cuon dan vao trong thanh xoan oc gan
     // lap day hinh chu nhat, quay dau tien nam giua ban.
-    // long/thin la kich thuoc quan o ty le scale hien tai (co the thu nho lai khi bi ket).
+    // long/thin la kich thuoc quan o ty le hien tai (55x29). Khong quay dau 180 do.
+    function spiralBoxFix(cursor, dirIdx, long, thin) {
+      const vertical = dirIdx === 1 || dirIdx === 3;
+      const w = vertical ? thin : long;
+      const h = vertical ? long : thin;
+      let x = cursor.x;
+      let y = cursor.y;
+      if (dirIdx === 2) x -= w;
+      if (dirIdx === 3) y -= h;
+      return { x, y, w, h, vertical };
+    }
+
+    function boxOverlapFix(box, rects) {
+      return rects.some((r) => {
+        const ox = Math.min(box.x + box.w, r.x + r.w) - Math.max(box.x, r.x);
+        const oy = Math.min(box.y + box.h, r.y + r.h) - Math.max(box.y, r.y);
+        return ox > 1 && oy > 1; // cham canh (0/1px) thi cho, chi chan noi that su
+      });
+    }
+
     function computeSpiralLayout(boardEntries, boundsW, boundsH, long, thin) {
       let dirIdx = 0;
       let cursor = { x: Math.floor(boundsW / 2), y: Math.floor(boundsH / 2) };
@@ -364,18 +359,15 @@
       }
 
       function tryPlace(tryDir) {
-        const box = spiralBox(cursor, tryDir, long, thin);
-        if (!inBounds(box) || boxOverlapsAny(box, rects)) return null;
+        const box = spiralBoxFix(cursor, tryDir, long, thin);
+        if (!inBounds(box) || boxOverlapFix(box, rects)) return null;
         return box;
       }
 
       boardEntries.forEach((entry) => {
-        // Moi quan noi tiep vao dau MO cua quan truoc (cursor = canh dang mo). Thu cac huong
-        // (khong quay dau 180 do - di lam lech diem noi): uu tien huong dang di, roi 90 do.
-        // Quan doi xem nhu quan thuong (noi tiep theo huong) -> giu diem noi dung, xoan oc van
-        // bẻ vuong goc khi cham bien/cham nhanh.
+        // Thu cac huong (khong quay dau 180 do - di lam lech diem noi): uu tien huong dang di,
+        // roi 90 do. Quan doi xem nhu quan thuong de giu diem noi dung.
         const tryOrder = [dirIdx, (dirIdx + 1) % 4, (dirIdx + 3) % 4];
-
         let box = null;
         let chosenDir = null;
         for (const cand of tryOrder) {
@@ -384,18 +376,15 @@
           if (b) { box = b; chosenDir = cand; break; }
         }
         if (!box) {
-          blocked = true; // kẹt - render se thu scale nho lai cho toan bo
+          blocked = true;
           chosenDir = dirIdx;
-          box = spiralBox(cursor, chosenDir, long, thin);
+          box = spiralBoxFix(cursor, chosenDir, long, thin);
         }
 
         dirIdx = chosenDir;
-        // val theo huong: dau noi (v1) nam o canh tiep xuc huong di. Trai/Len di nguoc nen
-        // doi thu tu left/right de canh cham dung.
         let v1, v2;
         if (dirIdx === 2 || dirIdx === 3) { v1 = entry.right; v2 = entry.left; }
         else { v1 = entry.left; v2 = entry.right; }
-
         positions.push({ x: box.x, y: box.y, w: box.w, h: box.h, vertical: box.vertical, v1, v2 });
         rects.push(box);
 
@@ -404,17 +393,13 @@
         else cursor = { x: box.x, y: box.y };
       });
 
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       positions.forEach((p) => {
         minX = Math.min(minX, p.x);
         minY = Math.min(minY, p.y);
         maxX = Math.max(maxX, p.x + p.w);
         maxY = Math.max(maxY, p.y + p.h);
       });
-
       return { positions, minX, minY, maxX, maxY, boundsW, boundsH, blocked };
     }
 
@@ -426,54 +411,39 @@
         return;
       }
 
-      // Kich thuoc khung that cua ban (table-oval) - tru bot padding cua no. Ban to het co
-      // theo layout CSS (flex:1 het chieu cao con lai man hinh), nen khung nay lon hon truoc
-      // nhieu - xoan oc se cuon vua khap ban thay vi bi ep nho som.
       const padding = 16;
       const boundsW = Math.max(60, (els.tableOval.clientWidth || 320) - padding);
       const boundsH = Math.max(60, (els.tableOval.clientHeight || 240) - padding);
 
-      // Xep layout o scale goc; neu bi ket (khong the vuong goc vi hang xom/cham bien), thu
-      // nho quan lai de giai phong khong gian, giong domino that khi ban day - khong quay dau 180.
-      let scale = 1;
-      let layout = computeSpiralLayout(boardEntries, boundsW, boundsH, UNIT_LONG, UNIT_THIN);
-      let tries = 0;
-      while (layout.blocked && scale > MIN_SCALE && tries < 8) {
-        scale = Math.max(MIN_SCALE, scale * 0.75);
-        layout = computeSpiralLayout(boardEntries, boundsW, boundsH, UNIT_LONG * scale, UNIT_THIN * scale);
-        tries += 1;
-      }
+      // Xep layout LUON o DON VI GOC (UNIT_LONG/THIN), toa do nguyen nhat. Neu layout bi ket
+      // (khong vuong goc duoc vi rang buoc bien/hang xom) thi khong quay dau 180, da duoc lo bo.
+      const layout = computeSpiralLayout(boardEntries, boundsW, boundsH, UNIT_LONG, UNIT_THIN);
 
-      // Xoan oc tinh toa do xoay quanh tam (boundsW/2, boundsH/2). Dich lui cac toa do de
-      // quay dau (toa do min) ve (0,0) va dat thanh toan bo so voi board - rai board se duoc
-      // center boi table-oval, nen quay dau tren thuc te nam giua ban. Giua tu 2 huong: neu
-      // layout lan sang 2 phia tu tam thi min <= 0 van duoc giu (khong do phan canh).
-      const posX = -layout.minX;
-      const posY = -layout.minY;
-      const spanX = Math.max(1, layout.maxX - layout.minX);
-      const spanY = Math.max(1, layout.maxY - layout.minY);
-      // Cai layout da dung kich thuoc theo scale, nen anh scale o day phai bot du de khong
-      // phong to. Giua nguyen scale da dung de xep (co truong hop cat bot khi scale<1).
-      const effScale = scale;
+      const minX = layout.minX;
+      const minY = layout.minY;
+      const spanX = Math.max(1, layout.maxX - minX);
+      const spanY = Math.max(1, layout.maxY - minY);
+
+      // finalScale = he so hom nhat de vua (fitScale). Neu ban con trong (fitScale > 1) thi
+      // phong to hom up to MAX_GROW de lap het khoang trong thua, ko de quan nho khi ban trong.
+      const MAX_GROW = 1.6;
+      const fitScale = Math.min(boundsW / spanX, boundsH / spanY);
+      const finalScale = fitScale > 1 ? Math.min(MAX_GROW, fitScale) : Math.max(MIN_SCALE, fitScale);
 
       layout.positions.forEach((pos) => {
-        // dung pos.v1/pos.v2 (da xoay theo huong) de cham diem khop đúng o ca 4 huong;
-        // coi do la cach se doan quan noi bay vi lat nguoc thu tu ngam.
         const el = makeTileEl(pos.v1, pos.v2, pos.vertical);
         el.classList.add('board-tile');
-        // layout da dung kich thuoc da scale => vi tri tinh bang chinh do; bien doi scale de
-        // quan DOM (co that) thu theo effScale, origin o goc quan de khop canh.
-        el.style.left = `${pos.x + posX}px`;
-        el.style.top = `${pos.y + posY}px`;
-        el.style.transform = `scale(${effScale})`;
+        // Toa do goc (nguyen) nhan finalScale; moi quan cung finalScale origin top-left, nen
+        // cạnh chung giua 2 quan lien tiep (xA+Aw)*k va xB*k = cung bien thuc -> khop khit.
+        el.style.left = `${(pos.x - minX) * finalScale}px`;
+        el.style.top = `${(pos.y - minY) * finalScale}px`;
+        el.style.transform = `scale(${finalScale})`;
         el.style.transformOrigin = 'top left';
         els.board.appendChild(el);
       });
 
-      // Kich thuoc dung bang noi dung thuc, de table-oval (align-items/justify-content:
-      // center) tu can giua ban - dung "bat dau ve tu giua ban" nhu yeu cau.
-      els.board.style.width = `${spanX}px`;
-      els.board.style.height = `${spanY}px`;
+      els.board.style.width = `${spanX * finalScale}px`;
+      els.board.style.height = `${spanY * finalScale}px`;
     }
 
     // 1 muc gon trong hang doi thu - chi chu, khong logo/avatar
