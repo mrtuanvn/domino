@@ -289,47 +289,54 @@
 
     function renderSnakeBoard(boardEntries) {
       els.board.innerHTML = '';
+      els.board.style.width = '100%'; // reset ve day container truoc khi do, tranh do nham gia tri cu
       if (boardEntries.length === 0) {
         els.board.style.height = '40px';
         return;
       }
 
       // Kich thuoc thuc te cua 1 quan (khop CSS: nua quan 26px + vien 1.5px*2)
-      const HORIZ_W = 55; // quan nam ngang: 2 nua canh nhau
-      const ROW_H = 55; // chieu cao 1 hang = chieu cao quan dung (de cho quan re khong bi de)
-      const TILE_THIN = 29; // be day quan (chieu cao quan nam / chieu rong quan dung)
+      const LONG = 55; // chieu dai quan (2 nua canh nhau)
+      const THIN = 29; // chieu day quan
 
       const containerWidth = els.board.clientWidth || 320;
-      const cols = Math.max(3, Math.floor(containerWidth / HORIZ_W));
 
-      let row = 0;
-      let col = 0;
-      let dir = 1;
-      let prevRow = 0;
+      let dir = 'H'; // huong dang di: 'H' ngang, 'V' doc - be huong tai quan doi, giong domino that
+      let x = 0;
+      let y = 0;
+      let maxX = 0;
+      let maxY = 0;
 
       boardEntries.forEach((entry, i) => {
-        const isTurn = i > 0 && prevRow !== row;
-        prevRow = row;
+        const isDouble = entry.tile[0] === entry.tile[1];
 
-        const el = makeTileEl(entry.tile, isTurn);
+        if (isDouble && i > 0) {
+          dir = dir === 'H' ? 'V' : 'H';
+        }
+        // du la quan doi hay khong, het cho ngang van phai be xuong - khong de tran ban
+        if (dir === 'H' && x + LONG > containerWidth) {
+          dir = 'V';
+        }
+
+        const vertical = dir === 'V';
+        const w = vertical ? THIN : LONG;
+        const h = vertical ? LONG : THIN;
+
+        const el = makeTileEl(entry.tile, vertical);
         el.classList.add('board-tile');
-        const top = row * ROW_H + (isTurn ? 0 : (TILE_THIN === ROW_H ? 0 : (ROW_H - TILE_THIN) / 2));
-        const left = isTurn ? col * HORIZ_W + (HORIZ_W - TILE_THIN) / 2 : col * HORIZ_W;
-        el.style.left = `${left}px`;
-        el.style.top = `${top}px`;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
         els.board.appendChild(el);
 
-        const nextCol = col + dir;
-        if (nextCol < 0 || nextCol >= cols) {
-          row += 1;
-          dir = -dir;
-        } else {
-          col = nextCol;
-        }
+        maxX = Math.max(maxX, x + w);
+        maxY = Math.max(maxY, y + h);
+
+        if (dir === 'H') x += w;
+        else y += h;
       });
 
-      els.board.style.height = `${(row + 1) * ROW_H}px`;
-      els.board.style.width = `${cols * HORIZ_W}px`;
+      els.board.style.width = `${Math.max(maxX, containerWidth)}px`;
+      els.board.style.height = `${maxY}px`;
     }
 
     function renderOpponentSeat(container, s) {
