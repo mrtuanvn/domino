@@ -137,7 +137,7 @@
 
   function initRoom(roomId) {
     lobbyView.style.display = 'none';
-    roomView.style.display = 'block';
+    roomView.style.display = 'flex';
 
     const token = getOrCreateToken(roomId);
     const name = getOrAskName();
@@ -156,19 +156,40 @@
       lobbyActions: document.getElementById('lobby-actions'),
       startBtn: document.getElementById('start-btn'),
       boardArea: document.getElementById('board-area'),
-      seatTop: document.getElementById('seat-top'),
-      seatLeft: document.getElementById('seat-left'),
-      seatRight: document.getElementById('seat-right'),
+      opponentsRow: document.getElementById('opponents-row'),
+      tableOval: document.getElementById('table-oval'),
       turnIndicator: document.getElementById('turn-indicator'),
       board: document.getElementById('board'),
       yourSeatChip: document.getElementById('your-seat-chip'),
       hand: document.getElementById('hand'),
       passBtn: document.getElementById('pass-btn'),
+      sideChoicePopup: document.getElementById('side-choice-popup'),
+      sideChoiceLeft: document.getElementById('side-choice-left'),
+      sideChoiceRight: document.getElementById('side-choice-right'),
       resultOverlay: document.getElementById('result-overlay'),
       resultText: document.getElementById('result-text'),
       rematchBtn: document.getElementById('rematch-btn'),
       toast: document.getElementById('toast'),
     };
+
+    function openSideChoice(handIndex, moves) {
+      const leftMove = moves.find((m) => m.side === 'left');
+      const rightMove = moves.find((m) => m.side === 'right');
+      els.sideChoiceLeft.style.display = leftMove ? 'inline-block' : 'none';
+      els.sideChoiceRight.style.display = rightMove ? 'inline-block' : 'none';
+      // gan lai onclick (khong dung addEventListener) de khong bao gio cong don handler cu
+      els.sideChoiceLeft.onclick = () => {
+        els.sideChoicePopup.style.display = 'none';
+        SoundFX.play('place');
+        socket.emit('play', { handIndex, side: 'left' });
+      };
+      els.sideChoiceRight.onclick = () => {
+        els.sideChoicePopup.style.display = 'none';
+        SoundFX.play('place');
+        socket.emit('play', { handIndex, side: 'right' });
+      };
+      els.sideChoicePopup.style.display = 'flex';
+    }
 
     function updateSoundIcon() {
       els.soundToggle.textContent = SoundFX.isMuted() ? '🔇' : '🔊';
@@ -298,10 +319,10 @@
     }
 
     // dirIdx theo chieu kim dong ho: 0=Phai, 1=Xuong, 2=Trai, 3=Len.
-    // Xay layout tu do (khong bi chui vao 1 khung co dinh khi xep): quan thuong noi tiep
-    // theo huong hien tai, quan doi be vuong goc. Khi cham biên (container co dinh) HOAC cham
-    // nhanh da xep, thi be vuong goc 90. Sau khi xep xong hoan toan tu do, render se thu nho
-    // toan bo (scale) cho vua khung 340px - nen khong bao gio phai "keo dai" ban vo han.
+    // Uu tien di trong khung ban (that) - cham bien thi be vuong goc; neu khong con huong
+    // nao vua khung thi van uu tien khong chong len nhanh da xep (an toan tuyet doi), va de
+    // buoc scale-to-fit o renderSnakeBoard xu ly phan con lai. Nho vay ban se cuon dan vao
+    // trong thanh xoan oc gan lap day hinh chu nhat, thay vi keo dai mai theo 1 huong.
     function spiralBox(cursor, dirIdx, long, thin) {
       const vertical = dirIdx === 1 || dirIdx === 3;
       const w = vertical ? thin : long;
@@ -327,29 +348,37 @@
     const UNIT_LONG = 55;
     const UNIT_THIN = 29;
 
-    // Xep tu do theo ca 4 huong (khong bi ep vao 1 khung ngang khi xep): quan thuong noi
-    // tiep theo huong hien tai, quan doi be vuong goc (giong domino that). Cham nhanh da
-    // xep truoc thi be vuong goc tiep (chieu kim dong ho) - tu nhien cuon thanh xoan oc.
-    function computeSpiralLayout(boardEntries) {
+    // Xep tu TAM ban, uu tien nam trong khung that (boundsW x boundsH): quan thuong noi tiep
+    // theo huong hien tai, quan doi be vuong goc (giong domino that). Cham bien khung HOAC
+    // cham nhanh da xep truoc thi be vuong goc tiep (chieu kim dong ho) - tu nhien cuon dan
+    // vao trong thanh xoan oc gan lap day hinh chu nhat, quay dau tien nam giua ban.
+    function computeSpiralLayout(boardEntries, boundsW, boundsH) {
       let dirIdx = 0;
-      let cursor = { x: 0, y: 0 };
+      let cursor = { x: Math.floor(boundsW / 2), y: Math.floor(boundsH / 2) };
       const rects = [];
       const positions = [];
+
+      function inBounds(box) {
+        return box.x >= 0 && box.y >= 0 && box.x + box.w <= boundsW && box.y + box.h <= boundsH;
+      }
 
       boardEntries.forEach((entry, i) => {
         const isDouble = entry.tile[0] === entry.tile[1];
         const startDir = isDouble && i > 0 ? (dirIdx + 1) % 4 : dirIdx;
 
         let chosenDir = null;
+        let firstFree = null; // huong dau tien khong chong lan, dung khi khong huong nao vua khung
         for (let attempt = 0; attempt < 4; attempt++) {
           const tryDir = (startDir + attempt) % 4;
           const box = spiralBox(cursor, tryDir, UNIT_LONG, UNIT_THIN);
-          if (!boxOverlapsAny(box, rects)) {
+          if (boxOverlapsAny(box, rects)) continue;
+          if (firstFree === null) firstFree = tryDir;
+          if (inBounds(box)) {
             chosenDir = tryDir;
             break;
           }
         }
-        if (chosenDir === null) chosenDir = startDir; // ket cung - hiem khi xay ra, chap nhan
+        if (chosenDir === null) chosenDir = firstFree !== null ? firstFree : startDir;
 
         dirIdx = chosenDir;
         const box = spiralBox(cursor, dirIdx, UNIT_LONG, UNIT_THIN);
@@ -362,47 +391,49 @@
         else cursor = { x: box.x, y: box.y }; // Trai/Len: diem cam la chinh goc quan vua dat
       });
 
-      // dua tat ca ve toa do khong am (phong khi xoan oc lan sang trai/len goc xuat phat)
-      let minX = 0;
-      let minY = 0;
+      // Lay bao quanh (min/max) cua luoi XAY SANG CA 4 HUONG tu tam ban - vi luc nay board
+      // se duoc dat truc tiep toa do tuong doi (root tai goc man hinh), khong dich ve 0-0.
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
       positions.forEach((p) => {
         minX = Math.min(minX, p.x);
         minY = Math.min(minY, p.y);
-      });
-      const offsetX = -minX;
-      const offsetY = -minY;
-
-      let maxX = 0;
-      let maxY = 0;
-      const shifted = positions.map((p) => {
-        const x = p.x + offsetX;
-        const y = p.y + offsetY;
-        maxX = Math.max(maxX, x + p.w);
-        maxY = Math.max(maxY, y + p.h);
-        return { x, y, vertical: p.vertical };
+        maxX = Math.max(maxX, p.x + p.w);
+        maxY = Math.max(maxY, p.y + p.h);
       });
 
-      return { positions: shifted, maxX, maxY };
+      return { positions, minX, minY, maxX, maxY, boundsW, boundsH };
     }
 
     function renderSnakeBoard(boardEntries) {
       els.board.innerHTML = '';
-      els.board.style.width = '100%'; // reset ve day container truoc khi do, tranh do nham gia tri cu
-      els.board.style.height = '';
       if (boardEntries.length === 0) {
-        els.board.style.height = '40px';
+        els.board.style.width = '0';
+        els.board.style.height = '0';
         return;
       }
 
-      const MAX_BOARD_HEIGHT = 340; // khung ban co dinh - khong keo dai vo han, thu nho quan de vua thay vao do
-      const containerWidth = els.board.clientWidth || 320;
+      // Kich thuoc khung that cua ban (table-oval) - tru bot padding cua no. Ban to het co
+      // theo layout CSS (flex:1 het chieu cao con lai man hinh), nen khung nay lon hon truoc
+      // nhieu - xoan oc se cuon vua khap ban thay vi bi ep nho som.
+      const padding = 16;
+      const boundsW = Math.max(60, (els.tableOval.clientWidth || 320) - padding);
+      const boundsH = Math.max(60, (els.tableOval.clientHeight || 240) - padding);
 
-      // Layout tinh 1 lan duy nhat o don vi chuan, khong chong lan (dam bao boi thuat toan).
-      const layout = computeSpiralLayout(boardEntries);
+      const layout = computeSpiralLayout(boardEntries, boundsW, boundsH);
 
-      // Thu nho toan bo (scale) de vua ca chieu rong container lan chieu cao gioi han -
-      // khong phong to qua 1 (van dai ngan thi giu nguyen co that).
-      const scale = Math.min(1, containerWidth / layout.maxX, MAX_BOARD_HEIGHT / layout.maxY);
+      // Xoan oc tinh toa do xoay quanh tam (boundsW/2, boundsH/2). Dich lui cac toa do de
+      // quay dau (toa do min) ve (0,0) va dat thanh toan bo so voi board - rai board se duoc
+      // center boi table-oval, nen quay dau tren thuc te nam giua ban. Giua tu 2 huong: neu
+      // layout lan sang 2 phia tu tam thi min <= 0 van duoc giu (khong do phan canh).
+      const posX = -layout.minX;
+      const posY = -layout.minY;
+      const spanX = layout.maxX - layout.minX;
+      const spanY = layout.maxY - layout.minY;
+
+      const scale = Math.min(1, boundsW / spanX, boundsH / spanY);
 
       layout.positions.forEach((pos, i) => {
         const entry = boardEntries[i];
@@ -410,33 +441,35 @@
         // khong dung thu tu goc cua quan [a,b] - tranh noi sai diem nhu bug da gap
         const el = makeTileEl(entry.left, entry.right, pos.vertical);
         el.classList.add('board-tile');
-        el.style.left = `${pos.x * scale}px`;
-        el.style.top = `${pos.y * scale}px`;
+        el.style.left = `${(pos.x + posX) * scale}px`;
+        el.style.top = `${(pos.y + posY) * scale}px`;
         el.style.transform = `scale(${scale})`;
         el.style.transformOrigin = 'top left';
         els.board.appendChild(el);
       });
 
-      els.board.style.width = `${Math.max(layout.maxX * scale, containerWidth)}px`;
-      els.board.style.height = `${Math.max(layout.maxY * scale, 40)}px`;
+      // Kich thuoc dung bang noi dung thuc, de table-oval (align-items/justify-content:
+      // center) tu can giua ban - dung "bat dau ve tu giua ban" nhu yeu cau.
+      els.board.style.width = `${spanX * scale}px`;
+      els.board.style.height = `${spanY * scale}px`;
     }
 
-    function renderOpponentSeat(container, s) {
-      container.innerHTML = '';
-      container.classList.toggle('empty', !s.name);
+    // 1 muc gon trong hang doi thu - chi chu, khong logo/avatar
+    function makeOpponentItem(s, isTurn) {
+      const item = document.createElement('div');
+      item.className = 'opponent-item' + (isTurn ? ' turn' : '') + (s.name ? '' : ' empty');
       if (!s.name) {
-        container.innerHTML = '<span class="seat-name-pill">Ghế trống</span>';
-        return;
+        item.textContent = 'Ghế trống';
+        return item;
       }
-      const namePill = document.createElement('span');
-      namePill.className = 'seat-name-pill';
-      namePill.textContent = `${s.name}${s.connected ? '' : ' (mất kết nối)'}`;
-      const metaEl = document.createElement('div');
-      metaEl.className = 'seat-meta';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'opp-name';
+      nameEl.textContent = `${s.name}${s.connected ? '' : ' (mất kết nối)'}`;
+      const metaEl = document.createElement('span');
       metaEl.textContent = `${s.handCount} quân`;
-      container.appendChild(makeAvatar(s));
-      container.appendChild(namePill);
-      container.appendChild(metaEl);
+      item.appendChild(nameEl);
+      item.appendChild(metaEl);
+      return item;
     }
 
     function render(state) {
@@ -467,28 +500,22 @@
       const inLobby = state.status === 'lobby';
       els.seats.style.display = inLobby ? 'grid' : 'none';
       els.lobbyActions.style.display = inLobby ? 'block' : 'none';
-      els.boardArea.style.display = inLobby ? 'none' : 'block';
+      els.boardArea.style.display = inLobby ? 'none' : 'flex';
       if (inLobby) { stopCountdown(); return; }
 
-      // Xoay bang ghe sao cho ban luon o duoi cung
+      // Xoay bang ghe sao cho ban luon o duoi cung; 3 doi thu ve 1 dong ngang, khong logo
       const you = state.yourSeat !== -1 ? state.yourSeat : 0;
       const relSeat = (idx) => (idx - you + 4) % 4;
       const seatByRel = {};
       state.seats.forEach((s, idx) => { seatByRel[relSeat(idx)] = { ...s, idx }; });
 
-      renderOpponentSeat(els.seatLeft, seatByRel[1] || {});
-      renderOpponentSeat(els.seatTop, seatByRel[2] || {});
-      renderOpponentSeat(els.seatRight, seatByRel[3] || {});
-
-      [
-        [els.seatLeft, seatByRel[1]],
-        [els.seatTop, seatByRel[2]],
-        [els.seatRight, seatByRel[3]],
-      ].forEach(([elx, s]) => {
-        elx.classList.toggle('turn', !!(s && state.turnSeat === s.idx));
+      els.opponentsRow.innerHTML = '';
+      [seatByRel[1], seatByRel[2], seatByRel[3]].forEach((s) => {
+        const info = s || {};
+        els.opponentsRow.appendChild(makeOpponentItem(info, !!(s && state.turnSeat === s.idx)));
       });
 
-      // Ban co giua ban - xep kieu ran, chi re huong khi het cho ngang, uu tien ve het quan
+      // Ban co - xep xoan oc trong khung that cua ban, uu tien khong gian toi da
       renderSnakeBoard(state.board);
 
       // Chi bao luot (dem nguoc duoc noi them boi startCountdownFor)
@@ -516,6 +543,7 @@
       // Bai tren tay - xep dung, keo tha de sap xep lai
       const orderedHand = reconcileHandOrder(state.yourHand);
       els.hand.innerHTML = '';
+      els.sideChoicePopup.style.display = 'none'; // bai duoc dung lai moi luot render - dong popup cu (neu co)
       let dragFromIdx = null;
 
       orderedHand.forEach((tile, displayIdx) => {
@@ -542,7 +570,7 @@
               SoundFX.play('place');
               socket.emit('play', { handIndex, side: movesForTile[0].side });
             } else {
-              showSideChoice(el, handIndex, movesForTile);
+              openSideChoice(handIndex, movesForTile);
             }
           });
         } else {
@@ -550,31 +578,6 @@
         }
         els.hand.appendChild(el);
       });
-
-      function collapseSideChoices() {
-        // dong lai bat ky khung Trai/Phai nao dang mo do bam quan khac truoc do
-        els.hand.querySelectorAll('.side-choice').forEach((wrap) => {
-          wrap.replaceWith(wrap.lastElementChild);
-        });
-      }
-
-      function showSideChoice(anchorEl, handIndex, moves) {
-        collapseSideChoices();
-        const wrap = document.createElement('div');
-        wrap.className = 'side-choice';
-        moves.forEach((m) => {
-          const b = document.createElement('button');
-          b.textContent = m.side === 'left' ? 'Trái' : 'Phải';
-          b.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            SoundFX.play('place');
-            socket.emit('play', { handIndex, side: m.side });
-          });
-          wrap.appendChild(b);
-        });
-        anchorEl.replaceWith(wrap);
-        wrap.appendChild(anchorEl);
-      }
 
       // Nut bo luot
       els.passBtn.style.display = isMyTurn && state.yourValidMoves.length === 0 ? 'inline-block' : 'none';
