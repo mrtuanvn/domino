@@ -67,11 +67,11 @@
     return half;
   }
 
-  function makeTileEl(tile, vertical) {
+  function makeTileEl(val1, val2, vertical) {
     const el = document.createElement('div');
     el.className = 'domino-tile' + (vertical ? ' vertical' : '');
-    el.appendChild(makeHalf(tile[0], true));
-    el.appendChild(makeHalf(tile[1], false));
+    el.appendChild(makeHalf(val1, true));
+    el.appendChild(makeHalf(val2, false));
     return el;
   }
 
@@ -287,25 +287,13 @@
       return av;
     }
 
-    function renderSnakeBoard(boardEntries) {
-      els.board.innerHTML = '';
-      els.board.style.width = '100%'; // reset ve day container truoc khi do, tranh do nham gia tri cu
-      if (boardEntries.length === 0) {
-        els.board.style.height = '40px';
-        return;
-      }
-
-      // Kich thuoc thuc te cua 1 quan (khop CSS: nua quan 26px + vien 1.5px*2)
-      const LONG = 55; // chieu dai quan (2 nua canh nhau)
-      const THIN = 29; // chieu day quan
-
-      const containerWidth = els.board.clientWidth || 320;
-
+    function computeSnakeLayout(boardEntries, long, thin, containerWidth) {
       let dir = 'H'; // huong dang di: 'H' ngang, 'V' doc - be huong tai quan doi, giong domino that
       let x = 0;
       let y = 0;
       let maxX = 0;
       let maxY = 0;
+      const positions = [];
 
       boardEntries.forEach((entry, i) => {
         const isDouble = entry.tile[0] === entry.tile[1];
@@ -314,20 +302,15 @@
           dir = dir === 'H' ? 'V' : 'H';
         }
         // du la quan doi hay khong, het cho ngang van phai be xuong - khong de tran ban
-        if (dir === 'H' && x + LONG > containerWidth) {
+        if (dir === 'H' && x + long > containerWidth) {
           dir = 'V';
         }
 
         const vertical = dir === 'V';
-        const w = vertical ? THIN : LONG;
-        const h = vertical ? LONG : THIN;
+        const w = vertical ? thin : long;
+        const h = vertical ? long : thin;
 
-        const el = makeTileEl(entry.tile, vertical);
-        el.classList.add('board-tile');
-        el.style.left = `${x}px`;
-        el.style.top = `${y}px`;
-        els.board.appendChild(el);
-
+        positions.push({ x, y, vertical });
         maxX = Math.max(maxX, x + w);
         maxY = Math.max(maxY, y + h);
 
@@ -335,8 +318,54 @@
         else y += h;
       });
 
-      els.board.style.width = `${Math.max(maxX, containerWidth)}px`;
-      els.board.style.height = `${maxY}px`;
+      return { positions, maxX, maxY };
+    }
+
+    function renderSnakeBoard(boardEntries) {
+      els.board.innerHTML = '';
+      els.board.style.width = '100%'; // reset ve day container truoc khi do, tranh do nham gia tri cu
+      els.board.style.height = '';
+      if (boardEntries.length === 0) {
+        els.board.style.height = '40px';
+        return;
+      }
+
+      // Kich thuoc thuc te cua 1 quan o ty le goc (khop CSS: nua quan 26px + vien 1.5px*2)
+      const BASE_LONG = 55; // chieu dai quan (2 nua canh nhau)
+      const BASE_THIN = 29; // chieu day quan
+      const MAX_BOARD_HEIGHT = 340; // ban khong duoc dai vo han - qua muc nay thi thu nho quan lai
+      const MIN_SCALE = 0.45; // khong thu qua nho, mat kha nang doc diem
+
+      const containerWidth = els.board.clientWidth || 320;
+
+      let long = BASE_LONG;
+      let thin = BASE_THIN;
+      let layout = computeSnakeLayout(boardEntries, long, thin, containerWidth);
+
+      if (layout.maxY > MAX_BOARD_HEIGHT) {
+        const scale = Math.max(MIN_SCALE, MAX_BOARD_HEIGHT / layout.maxY);
+        long = BASE_LONG * scale;
+        thin = BASE_THIN * scale;
+        layout = computeSnakeLayout(boardEntries, long, thin, containerWidth);
+      }
+
+      const scaleFactor = long / BASE_LONG;
+
+      layout.positions.forEach((pos, i) => {
+        const entry = boardEntries[i];
+        // dung dung dau quan dang lo ra (entry.left/entry.right) de cham diem khop nhau,
+        // khong dung thu tu goc cua quan [a,b] - tranh noi sai diem nhu bug da gap
+        const el = makeTileEl(entry.left, entry.right, pos.vertical);
+        el.classList.add('board-tile');
+        el.style.left = `${pos.x}px`;
+        el.style.top = `${pos.y}px`;
+        el.style.transform = `scale(${scaleFactor})`;
+        el.style.transformOrigin = 'top left';
+        els.board.appendChild(el);
+      });
+
+      els.board.style.width = `${Math.max(layout.maxX, containerWidth)}px`;
+      els.board.style.height = `${Math.max(layout.maxY, 40)}px`;
     }
 
     function renderOpponentSeat(container, s) {
@@ -439,7 +468,7 @@
       orderedHand.forEach((tile, displayIdx) => {
         const handIndex = state.yourHand.findIndex((t) => t[0] === tile[0] && t[1] === tile[1]);
         const movesForTile = state.yourValidMoves.filter((m) => m.handIndex === handIndex);
-        const el = makeTileEl(tile, true);
+        const el = makeTileEl(tile[0], tile[1], true);
         el.classList.add('hand-tile');
         el.draggable = true;
 
