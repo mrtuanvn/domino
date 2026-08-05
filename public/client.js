@@ -339,37 +339,63 @@
     const UNIT_THIN = 29;
     const MIN_SCALE = 0.4;
 
-    // Xoan oc chu nhat XAC DINH: moi canh (leg) dai dan theo cap so cong co dinh
-    // 1,1,2,2,3,3,... quan, xoay theo chieu kim dong ho - la hinh hoc THUAN TUY, khong phu
-    // thuoc kich thuoc/mep ban that (boundsW/boundsH chi con dung o buoc scale-to-fit sau,
-    // khong dung de quyet dinh khi nao re nua). Moi vong xoan luon lon hon vong truoc nen
-    // KHONG BAO GIO tu chong len chinh no hay bi ket duong di - qua do bo duoc toan bo co
-    // che "gan bien/relaxed/blocked" cu (nguon goc loi hien thi dut doan/ho canh khi chuoi
-    // du dai). Vi la ham thuan tuy theo thu tu quan, co the goi lai tu dau bat cu luc nao.
+    // Xoan oc BAM BIEN THAT cua ban truoc, roi moi thu nho dan vao trong: vong dau tien di
+    // sat 4 canh cua khung that (ring = {0,0,boundsW,boundsH}), chi khi da di het 1 vong (du
+    // 4 lan re) thi ring moi co lai dung 1 be day 'thin' cho vong ke tiep - giong xep hinh
+    // xoan oc chu nhat kinh dien (spiral matrix) nhung buoc di dai bien doi (long) thay vi 1 o.
     function computeSpiralLayout(boardEntries, boundsW, boundsH, long, thin) {
       let dirIdx = 0; // 0=Phai,1=Xuong,2=Trai,3=Len
-      let legLen = 1;
-      let legsAtLen = 0;
-      let remainingInLeg = legLen;
+      let ring = { left: 0, top: 0, right: boundsW, bottom: boundsH };
       let cursor = { x: 0, y: 0 };
       let prevBox = null;
       let prevDir = null;
       const positions = [];
+      // Diem mut A luon la goc (0,0): quan dau tien luon xuat phat huong Phai tu day.
+      const startTip = { x: cursor.x, y: cursor.y };
 
-      boardEntries.forEach((entry) => {
-        // Diem neo mac dinh la con tro; chi can chinh lai o dung 4 cap chuyen huong lech goc
-        // (Trai->Xuong, Phai->Len, Len->Phai, Xuong->Trai) - do la nhung cap ma con tro mac
-        // dinh khien quan moi chi cham quan truoc dung 1 diem goc (nhin nhu ho/dut doan) thay
-        // vi khop canh; cong thuc duoc suy tu hinh hoc that cua 2 hop chu nhat ke nhau.
-        let anchor = cursor;
-        if (prevBox && prevDir !== dirIdx) {
-          if ((prevDir === 2 && dirIdx === 1) || (prevDir === 0 && dirIdx === 3)) {
-            anchor = { x: cursor.x, y: cursor.y + prevBox.h };
-          } else if ((prevDir === 3 && dirIdx === 0) || (prevDir === 1 && dirIdx === 2)) {
-            anchor = { x: cursor.x + prevBox.w, y: cursor.y };
+      // Diem neo mac dinh la con tro; chi can chinh lai o dung 4 cap chuyen huong lech goc
+      // (Trai->Xuong, Phai->Len, Len->Phai, Xuong->Trai) - do la nhung cap ma con tro mac
+      // dinh khien quan moi chi cham quan truoc dung 1 diem goc (nhin nhu ho/dut doan) thay
+      // vi khop canh; cong thuc duoc suy tu hinh hoc that cua 2 hop chu nhat ke nhau.
+      function anchorFor(dir) {
+        if (prevBox && prevDir !== dir) {
+          if ((prevDir === 2 && dir === 1) || (prevDir === 0 && dir === 3)) {
+            return { x: cursor.x, y: cursor.y + prevBox.h };
+          }
+          if ((prevDir === 3 && dir === 0) || (prevDir === 1 && dir === 2)) {
+            return { x: cursor.x + prevBox.w, y: cursor.y };
           }
         }
+        return cursor;
+      }
 
+      // Quan tiep theo theo huong `dir` co tran qua canh trong (ring.* - thin, chua cho canh
+      // vuong goc sap toi) khong - neu co thi phai re truoc khi dat quan, chua dat.
+      function overflows(dir) {
+        const box = spiralBox(anchorFor(dir), dir, long, thin);
+        if (dir === 0) return box.x + box.w > ring.right - thin + 0.01;
+        if (dir === 1) return box.y + box.h > ring.bottom - thin + 0.01;
+        if (dir === 2) return box.x < ring.left + thin - 0.01;
+        return box.y < ring.top + thin - 0.01;
+      }
+
+      function shrinkRingIfRoom() {
+        const next = { left: ring.left + thin, top: ring.top + thin, right: ring.right - thin, bottom: ring.bottom - thin };
+        if (next.right - next.left > thin && next.bottom - next.top > thin) ring = next;
+      }
+
+      boardEntries.forEach((entry) => {
+        // Re toi da 4 lan (het 1 vong) truoc khi dat quan - du cho ban that nho toi muc chi
+        // vua 1-2 quan moi canh van khong bao gio ket vong lap vo han.
+        let guard = 0;
+        while (overflows(dirIdx) && guard < 4) {
+          const nextDir = (dirIdx + 1) % 4;
+          if (nextDir === 0) shrinkRingIfRoom(); // vua di het 1 vong -> thu nho vao trong
+          dirIdx = nextDir;
+          guard += 1;
+        }
+
+        const anchor = anchorFor(dirIdx);
         const box = spiralBox(anchor, dirIdx, long, thin);
         let v1, v2;
         if (dirIdx === 2 || dirIdx === 3) { v1 = entry.right; v2 = entry.left; }
@@ -382,17 +408,6 @@
 
         prevBox = box;
         prevDir = dirIdx;
-
-        remainingInLeg -= 1;
-        if (remainingInLeg === 0) {
-          dirIdx = (dirIdx + 1) % 4;
-          legsAtLen += 1;
-          // +2 (khong phai +1) vi don vi buoc di (long=55) va do lech giua 2 vong (thin=29)
-          // khac nhau ty le - +1 se khien vong sau tran nhe vao vong truoc (~3px chong lan);
-          // da kiem chung +2 la muc toi thieu an toan tuyet doi (test toi 300 quan).
-          if (legsAtLen === 2) { legsAtLen = 0; legLen += 2; }
-          remainingInLeg = legLen;
-        }
       });
 
       let minX = Infinity;
@@ -406,7 +421,10 @@
         maxY = Math.max(maxY, p.y + p.h);
       });
 
-      return { positions, minX, minY, maxX, maxY, boundsW, boundsH };
+      // Diem mut B: chinh la "cursor" sau quan cuoi - noi quan tiep theo se duoc gan vao.
+      const endTip = cursor;
+
+      return { positions, minX, minY, maxX, maxY, boundsW, boundsH, startTip, endTip };
     }
 
     function renderSnakeBoard(boardEntries) {
@@ -453,6 +471,17 @@
         el.style.transform = `scale(${finalScale})`;
         el.style.transformOrigin = 'top left';
         els.board.appendChild(el);
+      });
+
+      // Nhan A/B tai 2 dau day quan bai (thay cho "Trai/Phai" vi day la xoan oc, khong phai
+      // duong thang - "trai/phai" tren man hinh khong con dung voi dau nao cua chuoi nua).
+      [['A', layout.startTip], ['B', layout.endTip]].forEach(([label, tip]) => {
+        const badge = document.createElement('div');
+        badge.className = 'chain-end-badge';
+        badge.textContent = label;
+        badge.style.left = `${(tip.x - minX) * finalScale}px`;
+        badge.style.top = `${(tip.y - minY) * finalScale}px`;
+        els.board.appendChild(badge);
       });
 
       // Board thuc chieu cao/rộng theo scale da dung, table-oval center no.
