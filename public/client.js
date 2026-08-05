@@ -334,116 +334,65 @@
       return { x, y, w, h, vertical };
     }
 
-    function boxOverlapsAny(box, rects) {
-      return rects.some((r) => {
-        const ox = Math.min(box.x + box.w, r.x + r.w) - Math.max(box.x, r.x);
-        const oy = Math.min(box.y + box.h, r.y + r.h) - Math.max(box.y, r.y);
-        return ox > 1 && oy > 1; // cham canh (0/1px) thi cho, chi chan noi that su
-      });
-    }
-
     // Don vi chuan de tinh layout (ty le that: dai gap ~1.9 lan day).
     const UNIT_LONG = 55;
     const UNIT_THIN = 29;
     const MIN_SCALE = 0.4;
 
-    // Xep tu TAM ban, uu tien nam trong khung that (boundsW x boundsH): quan thuong noi tiep
-    // theo huong hien tai, quan doi be vuong goc (giong domino that). Cham bien khung HOAC cham
-    // nhanh da xep truoc thi be vuong goc tiep - tu nhien cuon dan vao trong thanh xoan oc gan
-    // lap day hinh chu nhat, quay dau tien nam giua ban.
-    // long/thin la kich thuoc quan o ty le scale hien tai (co the thu nho lai khi bi ket).
+    // Xoan oc chu nhat XAC DINH: moi canh (leg) dai dan theo cap so cong co dinh
+    // 1,1,2,2,3,3,... quan, xoay theo chieu kim dong ho - la hinh hoc THUAN TUY, khong phu
+    // thuoc kich thuoc/mep ban that (boundsW/boundsH chi con dung o buoc scale-to-fit sau,
+    // khong dung de quyet dinh khi nao re nua). Moi vong xoan luon lon hon vong truoc nen
+    // KHONG BAO GIO tu chong len chinh no hay bi ket duong di - qua do bo duoc toan bo co
+    // che "gan bien/relaxed/blocked" cu (nguon goc loi hien thi dut doan/ho canh khi chuoi
+    // du dai). Vi la ham thuan tuy theo thu tu quan, co the goi lai tu dau bat cu luc nao.
     function computeSpiralLayout(boardEntries, boundsW, boundsH, long, thin) {
-      let dirIdx = 0;
-      let cursor = { x: Math.floor(boundsW / 2), y: Math.floor(boundsH / 2) };
-      const rects = [];
+      let dirIdx = 0; // 0=Phai,1=Xuong,2=Trai,3=Len
+      let legLen = 1;
+      let legsAtLen = 0;
+      let remainingInLeg = legLen;
+      let cursor = { x: 0, y: 0 };
+      let prevBox = null;
+      let prevDir = null;
       const positions = [];
-      let blocked = false;
-      const NEAR_EDGE = long * 1.5; // con lai duoi 1.5 quan truoc mat thi moi coi la "gan bien"
 
-      function inBounds(box) {
-        return box.x >= 0 && box.y >= 0 && box.x + box.w <= boundsW && box.y + box.h <= boundsH;
-      }
-
-      // Khoang cach con lai tu con tro toi bien ban theo huong dir - dung de biet chung nao
-      // moi thuc su "gan dung bien" (khong quay som khi con thua cho di thang).
-      function distToEdge(dir) {
-        if (dir === 0) return boundsW - cursor.x;
-        if (dir === 2) return cursor.x;
-        if (dir === 1) return boundsH - cursor.y;
-        return cursor.y;
-      }
-
-      function tryPlace(tryDir) {
-        // Goc con tro mac dinh (flush-top/flush-left) tu chinh no khi quẹo tu huong Trai/Len
-        // sang Phai/Xuong - 2 cap nay se de quan moi chong len chinh quan vua xep (kiem tra
-        // toan hoc: ca 2 quan cung nam o "goc duong" cua con tro). Dich goc sang canh doi
-        // dien cua quan truoc de quan moi bam khop ma khong chong.
+      boardEntries.forEach((entry) => {
+        // Diem neo mac dinh la con tro; chi can chinh lai o dung 4 cap chuyen huong lech goc
+        // (Trai->Xuong, Phai->Len, Len->Phai, Xuong->Trai) - do la nhung cap ma con tro mac
+        // dinh khien quan moi chi cham quan truoc dung 1 diem goc (nhin nhu ho/dut doan) thay
+        // vi khop canh; cong thuc duoc suy tu hinh hoc that cua 2 hop chu nhat ke nhau.
         let anchor = cursor;
-        if (rects.length) {
-          const prevBox = rects[rects.length - 1];
-          if (dirIdx === 2 && tryDir === 1) anchor = { x: cursor.x, y: cursor.y + prevBox.h };
-          else if (dirIdx === 3 && tryDir === 0) anchor = { x: cursor.x + prevBox.w, y: cursor.y };
-        }
-        const box = spiralBox(anchor, tryDir, long, thin);
-        if (!inBounds(box) || boxOverlapsAny(box, rects)) return null;
-        // Khe con lai o canh ban theo huong di khong duoc nho hon 'thin' - neu khong quan
-        // sau se bi ket (khong du cho di thang tiep, cung khong du cho quẹo vuong goc) va
-        // tran thang ra ngoai ban mai. Tu choi som de thuat toan quẹo truoc khi bi ket.
-        let forwardLeftover;
-        if (tryDir === 0) forwardLeftover = boundsW - (box.x + box.w);
-        else if (tryDir === 2) forwardLeftover = box.x;
-        else if (tryDir === 1) forwardLeftover = boundsH - (box.y + box.h);
-        else forwardLeftover = box.y;
-        if (forwardLeftover > 0 && forwardLeftover < thin) return null;
-        return box;
-      }
-
-      boardEntries.forEach((entry, idx) => {
-        const isDouble = idx > 0 && entry.tile[0] === entry.tile[1];
-        // Thu huong: double uu tien be VUONG GOC (90 do) so voi huong di - "con doi vẽ vuông
-        // góc" nhu yeu cau. Con lai chua toi NEAR_EDGE thi cu di thang (bam sat het chieu
-        // ngang/doc ban truoc), chi chu dong quay 90 do khi thuc su gan dung bien.
-        // Khong bao gio quay dau 180 do (diem noi bi đào len).
-        let startDir = dirIdx;
-        if (isDouble) {
-          const d1 = (dirIdx + 1) % 4;
-          const d2 = (dirIdx + 3) % 4;
-          if (tryPlace(d1)) startDir = d1;
-          else if (tryPlace(d2)) startDir = d2;
-          // neu ca 2 deu khong vua thi giu huong (dang o goc qu - de binh thuong)
-        } else if (distToEdge(dirIdx) < NEAR_EDGE) {
-          const d1 = (dirIdx + 1) % 4;
-          const d3 = (dirIdx + 3) % 4;
-          if (tryPlace(d1)) startDir = d1;
-          else if (tryPlace(d3)) startDir = d3;
+        if (prevBox && prevDir !== dirIdx) {
+          if ((prevDir === 2 && dirIdx === 1) || (prevDir === 0 && dirIdx === 3)) {
+            anchor = { x: cursor.x, y: cursor.y + prevBox.h };
+          } else if ((prevDir === 3 && dirIdx === 0) || (prevDir === 1 && dirIdx === 2)) {
+            anchor = { x: cursor.x + prevBox.w, y: cursor.y };
+          }
         }
 
-        const tryOrder = [startDir, (dirIdx + 1) % 4, (dirIdx + 3) % 4];
-
-        let box = null;
-        let chosenDir = null;
-        for (const cand of tryOrder) {
-          if (cand === (dirIdx + 2) % 4) continue; // loai 180 do
-          const b = tryPlace(cand);
-          if (b) { box = b; chosenDir = cand; break; }
-        }
-        if (!box) {
-          blocked = true;
-          chosenDir = startDir;
-          box = spiralBox(cursor, chosenDir, long, thin);
-        }
-
-        dirIdx = chosenDir;
+        const box = spiralBox(anchor, dirIdx, long, thin);
         let v1, v2;
         if (dirIdx === 2 || dirIdx === 3) { v1 = entry.right; v2 = entry.left; }
         else { v1 = entry.left; v2 = entry.right; }
-
         positions.push({ x: box.x, y: box.y, w: box.w, h: box.h, vertical: box.vertical, v1, v2 });
-        rects.push(box);
 
         if (dirIdx === 0) cursor = { x: box.x + box.w, y: box.y };
         else if (dirIdx === 1) cursor = { x: box.x, y: box.y + box.h };
         else cursor = { x: box.x, y: box.y };
+
+        prevBox = box;
+        prevDir = dirIdx;
+
+        remainingInLeg -= 1;
+        if (remainingInLeg === 0) {
+          dirIdx = (dirIdx + 1) % 4;
+          legsAtLen += 1;
+          // +2 (khong phai +1) vi don vi buoc di (long=55) va do lech giua 2 vong (thin=29)
+          // khac nhau ty le - +1 se khien vong sau tran nhe vao vong truoc (~3px chong lan);
+          // da kiem chung +2 la muc toi thieu an toan tuyet doi (test toi 300 quan).
+          if (legsAtLen === 2) { legsAtLen = 0; legLen += 2; }
+          remainingInLeg = legLen;
+        }
       });
 
       let minX = Infinity;
@@ -457,7 +406,7 @@
         maxY = Math.max(maxY, p.y + p.h);
       });
 
-      return { positions, minX, minY, maxX, maxY, boundsW, boundsH, blocked };
+      return { positions, minX, minY, maxX, maxY, boundsW, boundsH };
     }
 
     function renderSnakeBoard(boardEntries) {
@@ -476,6 +425,10 @@
       const boundsH = Math.max(60, (els.tableOval.clientHeight || 240) - padding);
 
       // Xep layout o DON VI GOC (UNIT_LONG/THIN) - toa do nguyen nhat, khong chay lai theo scale.
+      // Luu y: UNIT_LONG/UNIT_THIN phai khop kich thuoc CSS that cua .domino-tile (box-sizing:
+      // border-box, 2 nua 26px + border 1.5px = 55x29) vi finalScale ben duoi scale deu ca vi
+      // tri lan kich thuoc - doi don vi o day ma khong doi CSS se lam quan hien thi lech khoi
+      // toa do da tinh (chong len nhau).
       const layout = computeSpiralLayout(boardEntries, boundsW, boundsH, UNIT_LONG, UNIT_THIN);
 
       const minX = layout.minX;
