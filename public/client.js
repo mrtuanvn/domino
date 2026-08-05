@@ -551,7 +551,15 @@
         els.hand.appendChild(el);
       });
 
+      function collapseSideChoices() {
+        // dong lai bat ky khung Trai/Phai nao dang mo do bam quan khac truoc do
+        els.hand.querySelectorAll('.side-choice').forEach((wrap) => {
+          wrap.replaceWith(wrap.lastElementChild);
+        });
+      }
+
       function showSideChoice(anchorEl, handIndex, moves) {
+        collapseSideChoices();
         const wrap = document.createElement('div');
         wrap.className = 'side-choice';
         moves.forEach((m) => {
