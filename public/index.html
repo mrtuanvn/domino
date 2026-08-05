@@ -37,13 +37,30 @@
 
 <div id="room-view" class="view" style="display:none">
   <header class="room-header">
-    <div>
-      <strong>Phòng: <span id="room-code"></span></strong>
-      <button id="copy-link-btn" class="small-btn">Sao chép link mời</button>
-    </div>
-    <div id="scoreboard" class="scoreboard"></div>
-    <button id="sound-toggle" class="small-btn" title="Bật/tắt âm thanh">🔊</button>
+    <span id="room-code-mini">Phòng: <span id="room-code"></span></span>
+    <button id="settings-btn" class="icon-btn" title="Tùy chọn">⚙️</button>
   </header>
+
+  <div id="settings-modal" class="modal-overlay" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <strong>Tùy chọn</strong>
+        <button id="settings-close-btn" class="icon-btn">✕</button>
+      </div>
+      <div class="modal-row">
+        <strong>Phòng: <span id="room-code-2"></span></strong>
+        <button id="copy-link-btn" class="small-btn">Sao chép link mời</button>
+      </div>
+      <div class="modal-row">
+        <span>Âm thanh</span>
+        <button id="sound-toggle" class="small-btn" title="Bật/tắt âm thanh">🔊</button>
+      </div>
+      <div class="modal-row modal-row-column">
+        <span>Tỷ số</span>
+        <div id="scoreboard" class="scoreboard"></div>
+      </div>
+    </div>
+  </div>
 
   <section id="seats" class="seats"></section>
 
