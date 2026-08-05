@@ -205,6 +205,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 /* ---------- Bai tren tay (nguoi choi, o duoi cung) ---------- */
 .hand-area {
   flex-shrink: 0; margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  position: relative;
 }
 .your-seat-chip { color: #fff; font-size: 10px; font-weight: 600; text-align: center; }
 .your-seat-chip .seat-avatar { width: 28px; height: 28px; font-size: 11px; margin-bottom: 1px; }
@@ -222,8 +223,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .hand-tile.dragging { opacity: 0.35; }
 .hand-tile.drag-over { box-shadow: 0 0 0 3px #fff; }
 
-/* Popup Trai/Phai - 1 the duy nhat, khong the chong len nhau khi bam nhieu quan */
-.side-choice-popup { display: flex; gap: 10px; justify-content: center; }
+/* Nut Bo luot: dat qua ben trai cua khu bai (position:absolute, khong chiem chieu cao trong
+   flex column) de khi hien/an khong lam co lai chieu cao ban choi phia tren. */
+#pass-btn {
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+}
+
+/* Popup Trai/Phai - dat qua ben phai cua khu bai (position:absolute, cung ly do nhu tren),
+   xep doc A/B de gon chieu ngang. */
+.side-choice-popup {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 8px; justify-content: center;
+}
 .side-choice-popup button { padding: 8px 18px; font-size: 14px; }
 
 .toast {

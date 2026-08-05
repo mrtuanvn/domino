@@ -361,7 +361,9 @@
       // duoc suy tu hinh hoc that cua 2 hop chu nhat ke nhau.
       function anchorFor(cur, dir, pBox, pDir) {
         if (pBox && pDir !== dir) {
-          if ((pDir === 0 && dir === 1) || (pDir === 2 && dir === 3)) return { x: cur.x, y: cur.y + pBox.h };
+          // Phai->Xuong (goc tren-phai): quan doc phai nep vao mep TRONG (phia vua di toi) cua
+          // quan ngang truoc, khong chi cham 1 diem goc - neu khong se ho hinh chu L o goc.
+          if (pDir === 0 && dir === 1) return { x: cur.x - thin, y: cur.y + pBox.h };
           if ((pDir === 3 && dir === 0) || (pDir === 1 && dir === 2)) return { x: cur.x + pBox.w, y: cur.y };
         }
         return cur;
