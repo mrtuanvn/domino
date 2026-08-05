@@ -176,7 +176,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   flex-shrink: 0; box-shadow: 0 2px 3px rgba(0,0,0,0.3);
 }
 .domino-tile .half {
-  width: 26px; height: 26px; display: grid; grid-template-columns: repeat(3,1fr);
+  width: 30px; height: 30px; display: grid; grid-template-columns: repeat(3,1fr);
   grid-template-rows: repeat(3,1fr); gap: 2px; padding: 4px;
 }
 .domino-tile .half.left { border-right: 1.5px solid #222; }

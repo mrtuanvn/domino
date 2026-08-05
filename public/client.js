@@ -335,14 +335,16 @@
     }
 
     // Don vi chuan de tinh layout (ty le that: dai gap ~1.9 lan day).
-    const UNIT_LONG = 55;
-    const UNIT_THIN = 29;
-    const MIN_SCALE = 0.4;
+    // Phai khop kich thuoc CSS that cua .domino-tile (.half 30px + border 1.5px => 63x33).
+    const UNIT_LONG = 63;
+    const UNIT_THIN = 33;
 
     // Xoan oc BAM BIEN THAT cua ban truoc, roi moi thu nho dan vao trong: vong dau tien di
-    // sat 4 canh cua khung that (ring = {0,0,boundsW,boundsH}), chi khi da di het 1 vong (du
-    // 4 lan re) thi ring moi co lai dung 1 be day 'thin' cho vong ke tiep - giong xep hinh
-    // xoan oc chu nhat kinh dien (spiral matrix) nhung buoc di dai bien doi (long) thay vi 1 o.
+    // sat 4 canh that cua khung (ring = {0,0,boundsW,boundsH}); moi canh (top/right/bottom/left)
+    // cua ring duoc cap nhat lai bang TOA DO THUC vua dat (khong phai +-thin suy dien), nen
+    // vong sau luon khop khit voi vi tri that cua vong truoc du long co chia het khong gian
+    // ban hay khong - giong xep hinh xoan oc chu nhat kinh dien (spiral matrix) nhung buoc di
+    // dai bien doi (long) thay vi 1 o.
     function computeSpiralLayout(boardEntries, boundsW, boundsH, long, thin) {
       let dirIdx = 0; // 0=Phai,1=Xuong,2=Trai,3=Len
       let ring = { left: 0, top: 0, right: boundsW, bottom: boundsH };
@@ -353,62 +355,101 @@
       // Diem mut A luon la goc (0,0): quan dau tien luon xuat phat huong Phai tu day.
       const startTip = { x: cursor.x, y: cursor.y };
 
-      // Diem neo mac dinh la con tro; chi can chinh lai o dung 4 cap chuyen huong lech goc
-      // (Trai->Xuong, Phai->Len, Len->Phai, Xuong->Trai) - do la nhung cap ma con tro mac
-      // dinh khien quan moi chi cham quan truoc dung 1 diem goc (nhin nhu ho/dut doan) thay
-      // vi khop canh; cong thuc duoc suy tu hinh hoc that cua 2 hop chu nhat ke nhau.
-      function anchorFor(dir) {
-        if (prevBox && prevDir !== dir) {
-          if ((prevDir === 2 && dir === 1) || (prevDir === 0 && dir === 3)) {
-            return { x: cursor.x, y: cursor.y + prevBox.h };
-          }
-          if ((prevDir === 3 && dir === 0) || (prevDir === 1 && dir === 2)) {
-            return { x: cursor.x + prevBox.w, y: cursor.y };
-          }
+      // Diem neo mac dinh la con tro; chi can chinh lai o dung 4 cap chuyen huong (Phai->Xuong,
+      // Trai->Len, Xuong->Trai, Len->Phai) - do la nhung cap ma con tro mac dinh khien quan moi
+      // chi cham quan truoc dung 1 diem goc (nhin nhu ho/dut doan) thay vi khop canh; cong thuc
+      // duoc suy tu hinh hoc that cua 2 hop chu nhat ke nhau.
+      function anchorFor(cur, dir, pBox, pDir) {
+        if (pBox && pDir !== dir) {
+          if ((pDir === 0 && dir === 1) || (pDir === 2 && dir === 3)) return { x: cur.x, y: cur.y + pBox.h };
+          if ((pDir === 3 && dir === 0) || (pDir === 1 && dir === 2)) return { x: cur.x + pBox.w, y: cur.y };
         }
-        return cursor;
+        return cur;
       }
 
       // Quan tiep theo theo huong `dir` co tran qua canh trong (ring.* - thin, chua cho canh
       // vuong goc sap toi) khong - neu co thi phai re truoc khi dat quan, chua dat.
       function overflows(dir) {
-        const box = spiralBox(anchorFor(dir), dir, long, thin);
+        const box = spiralBox(anchorFor(cursor, dir, prevBox, prevDir), dir, long, thin);
         if (dir === 0) return box.x + box.w > ring.right - thin + 0.01;
         if (dir === 1) return box.y + box.h > ring.bottom - thin + 0.01;
         if (dir === 2) return box.x < ring.left + thin - 0.01;
         return box.y < ring.top + thin - 0.01;
       }
 
-      function shrinkRingIfRoom() {
-        const next = { left: ring.left + thin, top: ring.top + thin, right: ring.right - thin, bottom: ring.bottom - thin };
-        if (next.right - next.left > thin && next.bottom - next.top > thin) ring = next;
+      function place(entry, dir, anchor) {
+        const box = spiralBox(anchor, dir, long, thin);
+        let v1, v2;
+        if (dir === 2 || dir === 3) { v1 = entry.right; v2 = entry.left; } else { v1 = entry.left; v2 = entry.right; }
+        positions.push({ x: box.x, y: box.y, w: box.w, h: box.h, vertical: box.vertical, v1, v2 });
+        return box;
       }
 
-      boardEntries.forEach((entry) => {
-        // Re toi da 4 lan (het 1 vong) truoc khi dat quan - du cho ban that nho toi muc chi
-        // vua 1-2 quan moi canh van khong bao gio ket vong lap vo han.
-        let guard = 0;
-        while (overflows(dirIdx) && guard < 4) {
-          const nextDir = (dirIdx + 1) % 4;
-          if (nextDir === 0) shrinkRingIfRoom(); // vua di het 1 vong -> thu nho vao trong
-          dirIdx = nextDir;
-          guard += 1;
+      function advanceCursor(dir, box) {
+        if (dir === 0) return { x: box.x + box.w, y: box.y };
+        if (dir === 1) return { x: box.x, y: box.y + box.h };
+        return { x: box.x, y: box.y };
+      }
+
+      // Xep tung quan bam ring hien tai; chi cho phep RE 1 LAN moi quan (dung nhu 1 xoan oc
+      // that su chi re o goc). Neu van tran ca sau khi re, nghia la ring da het cho (chi xay
+      // ra khi ban qua nho so voi so quan) - dung lai o day, phan con lai xu ly rieng ben duoi.
+      let exhaustedAt = boardEntries.length;
+      for (let i = 0; i < boardEntries.length; i++) {
+        if (overflows(dirIdx)) {
+          dirIdx = (dirIdx + 1) % 4;
+          if (overflows(dirIdx)) { exhaustedAt = i; break; }
         }
 
-        const anchor = anchorFor(dirIdx);
-        const box = spiralBox(anchor, dirIdx, long, thin);
-        let v1, v2;
-        if (dirIdx === 2 || dirIdx === 3) { v1 = entry.right; v2 = entry.left; }
-        else { v1 = entry.left; v2 = entry.right; }
-        positions.push({ x: box.x, y: box.y, w: box.w, h: box.h, vertical: box.vertical, v1, v2 });
+        const anchor = anchorFor(cursor, dirIdx, prevBox, prevDir);
+        const box = place(boardEntries[i], dirIdx, anchor);
+        // Cap nhat DUNG 1 canh cua ring ung voi huong vua di, bang toa do that vua dat - canh
+        // nay se duoc dung lai boi vong xoan ben trong (hoac boi buoc dong vong hien tai).
+        if (dirIdx === 0) ring.top = box.y;
+        else if (dirIdx === 1) ring.right = box.x;
+        else if (dirIdx === 2) ring.bottom = box.y;
+        else ring.left = box.x;
 
-        if (dirIdx === 0) cursor = { x: box.x + box.w, y: box.y };
-        else if (dirIdx === 1) cursor = { x: box.x, y: box.y + box.h };
-        else cursor = { x: box.x, y: box.y };
-
+        cursor = advanceCursor(dirIdx, box);
         prevBox = box;
         prevDir = dirIdx;
-      });
+      }
+
+      function overlapArea(a, b) {
+        const ox = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+        const oy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+        return ox * oy;
+      }
+
+      // Ring qua chat (hiem: man hinh rat nho + bai rat dai) - quan van phai noi tiep quan
+      // truoc (day quan bai khong bao gio duoc dut doan de lo lung), nen thu: di thang tiep,
+      // re phai, re trai - KHONG BAO GIO quay dau 180 do (chac chan de len chinh quan vua dat).
+      // Uu tien huong vua khong de len quan da xep VUA khong tran ra ngoai khung that cua ban
+      // (kiem tra toa do that); chi chap nhan tran khung khi khong con lua chon nao khac (rat
+      // hiem) - neu khong thi quan se troi ra ngoai bang, gay "ve tran" nhu bug da gap.
+      function inBounds(box) {
+        return box.x >= -0.01 && box.y >= -0.01 && box.x + box.w <= boundsW + 0.01 && box.y + box.h <= boundsH + 0.01;
+      }
+      for (let i = exhaustedAt; i < boardEntries.length; i++) {
+        const base = prevDir === null ? dirIdx : prevDir;
+        const candidates = [base, (base + 1) % 4, (base + 3) % 4];
+        let chosenDir = candidates[0];
+        let chosenAnchor = anchorFor(cursor, chosenDir, prevBox, prevDir);
+        let fallback = null;
+        for (const d of candidates) {
+          const anchor = anchorFor(cursor, d, prevBox, prevDir);
+          const box = spiralBox(anchor, d, long, thin);
+          if (positions.some((p) => overlapArea(p, box) > 0.5)) continue;
+          if (!fallback) fallback = { dir: d, anchor };
+          if (inBounds(box)) { chosenDir = d; chosenAnchor = anchor; fallback = null; break; }
+        }
+        if (fallback) { chosenDir = fallback.dir; chosenAnchor = fallback.anchor; }
+        dirIdx = chosenDir;
+        const box = place(boardEntries[i], dirIdx, chosenAnchor);
+        cursor = advanceCursor(dirIdx, box);
+        prevBox = box;
+        prevDir = dirIdx;
+      }
 
       let minX = Infinity;
       let minY = Infinity;
@@ -456,10 +497,12 @@
 
       // finalScale = he so nho nhat de vua (fitScale). Neu ban con trong (fitScale > 1) thi
       // phong to quan len toi da MAX_GROW de lấp het khoang trong thua (quan to hon thay vi de
-      // quan nho o giua ban trong); neu chuoi dai hon ban thi thu nho de vua (khong tran).
-      const MAX_GROW = 1.6;
+      // quan nho o giua ban trong); neu chuoi dai hon ban thi thu nho dung bang fitScale de
+      // luon vua khung that cua ban (KHONG dat san san mot muc thu nho toi thieu - lam vay se
+      // ep quan to hon fitScale va tran ra ngoai khung khi chuoi qua dai so voi ban).
+      const MAX_GROW = 2.2;
       const fitScale = Math.min(boundsW / spanX, boundsH / spanY);
-      const finalScale = fitScale > 1 ? Math.min(MAX_GROW, fitScale) : Math.max(MIN_SCALE, fitScale);
+      const finalScale = fitScale > 1 ? Math.min(MAX_GROW, fitScale) : fitScale;
 
       layout.positions.forEach((pos) => {
         const el = makeTileEl(pos.v1, pos.v2, pos.vertical);
