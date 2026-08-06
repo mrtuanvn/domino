@@ -55,10 +55,10 @@ function scoreMove(move, hand, ends, memory, seatIndex, numSeats, willEmptyHand)
 // hand: mang tile con lai cua bot
 // ends: {left,right} hoac null neu ban trong
 // memory: mang Set[] - memory[seat] la cac gia tri seat do da lo khong co
-// seatIndex: ghe cua bot, numSeats: tong so ghe (4)
-// Tra ve { handIndex, tile, side } hoac null (bo luot)
-function chooseBotMove(hand, ends, memory, seatIndex, numSeats) {
-  const moves = getValidMoves(hand, ends);
+// seatIndex: ghe cua bot, numSeats: tong so ghe (4), variant: bien the luat dang choi
+// Tra ve { handIndex, tile, side } hoac null (bo luot / can boc quan o bien the Draw)
+function chooseBotMove(hand, ends, memory, seatIndex, numSeats, variant = 'block') {
+  const moves = getValidMoves(hand, ends, variant);
   if (moves.length === 0) return null;
 
   let best = null;

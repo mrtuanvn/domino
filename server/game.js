@@ -11,11 +11,13 @@ function nextSeat(seat) {
 }
 
 function startRound(room) {
-  const hands = engine.dealHands(NUM_SEATS, 7);
+  const tilesPerPlayer = room.variant === 'draw' ? 5 : 7;
+  const { hands, stock } = engine.dealHands(NUM_SEATS, tilesPerPlayer);
   const { seat: startSeat, tile: startTile } = engine.findStartingSeat(hands);
 
   const game = {
     hands,
+    stock,
     board: [],
     ends: null,
     turnSeat: startSeat,
@@ -34,16 +36,42 @@ function startRound(room) {
   return game;
 }
 
+// Cong diem thuong ngay (Muggins/All Threes/Bergen) neu du dieu kien sau nuoc di vua roi.
+// Tra ve so diem thuong (0 neu khong co).
+function applyVariantBonus(room, seat) {
+  const game = room.game;
+  let bonus = 0;
+  if (room.variant === 'muggins') {
+    const total = engine.computeEndsScore(game.board);
+    if (total > 0 && total % engine.MUGGINS_DIVISOR === 0) bonus = total;
+  } else if (room.variant === 'allthrees') {
+    const total = engine.computeEndsScore(game.board);
+    if (total > 0 && total % engine.ALLTHREES_DIVISOR === 0) bonus = total;
+  } else if (room.variant === 'bergen' && game.ends && game.ends.left === game.ends.right) {
+    bonus = engine.BERGEN_POINTS.doubleEnds;
+  }
+  if (bonus > 0) {
+    room.scores[seat] += bonus;
+    if (room.mode === 'score' && room.scores.some((s) => s >= room.targetScore)) {
+      room.status = 'match-over';
+    }
+  }
+  return bonus;
+}
+
 function applyPlayInternal(room, seat, move) {
   const game = room.game;
-  game.board = engine.applyMove(game.board, game.ends, { ...move, seat });
+  game.board = engine.applyMove(game.board, game.ends, { ...move, seat }, room.variant);
   game.ends = engine.getOpenEnds(game.board);
   game.hands[seat] = engine.removeTileFromHand(game.hands[seat], move.tile);
-  game.history.push({ seat, action: 'play', tile: move.tile });
   game.passStreak = 0;
 
+  const bonus = applyVariantBonus(room, seat);
+  game.history.push({ seat, action: 'play', tile: move.tile, bonus: bonus || undefined });
+
   if (game.hands[seat].length === 0) {
-    finishRound(room, engine.resolveWinByEmptyHand(seat, game.hands));
+    const opts = room.variant === 'bergen' ? { fixedPoints: engine.BERGEN_POINTS.domino } : {};
+    finishRound(room, engine.resolveWinByEmptyHand(seat, game.hands, opts));
     return;
   }
   game.turnSeat = nextSeat(seat);
@@ -56,10 +84,31 @@ function applyPassInternal(room, seat) {
   game.passStreak += 1;
 
   if (game.passStreak >= NUM_SEATS) {
-    finishRound(room, engine.resolveBlockedRound(game.hands));
+    const opts = room.variant === 'bergen' ? { fixedPoints: engine.BERGEN_POINTS.blocked } : {};
+    finishRound(room, engine.resolveBlockedRound(game.hands, opts));
     return;
   }
   game.turnSeat = nextSeat(seat);
+}
+
+// Bien the Draw: khi khong co nuoc di, phai boc tung quan tu noc thay vi bo luot ngay.
+// Luot khong chuyen sang nguoi ke tiep - nguoi choi (hoac bot) thu lai sau khi boc.
+function drawFromStock(room, seat) {
+  const game = room.game;
+  if (!game || game.status !== 'playing') return { ok: false, error: 'Ván chơi chưa sẵn sàng' };
+  if (room.variant !== 'draw') return { ok: false, error: 'Phòng này không dùng luật bốc quân' };
+  if (game.turnSeat !== seat) return { ok: false, error: 'Chưa đến lượt bạn' };
+
+  const hand = game.hands[seat];
+  const validMoves = engine.getValidMoves(hand, game.ends, room.variant);
+  if (validMoves.length > 0) return { ok: false, error: 'Bạn vẫn còn nước đi, phải đánh trước' };
+  if (game.stock.length === 0) return { ok: false, error: 'Nọc đã hết' };
+
+  const [drawn, ...rest] = game.stock;
+  game.stock = rest;
+  game.hands[seat] = [...hand, drawn];
+  game.history.push({ seat, action: 'draw' });
+  return { ok: true };
 }
 
 function finishRound(room, result) {
@@ -92,7 +141,7 @@ function playTile(room, seat, move) {
   if (game.turnSeat !== seat) return { ok: false, error: 'Chưa đến lượt bạn' };
 
   const hand = game.hands[seat];
-  const validMoves = engine.getValidMoves(hand, game.ends);
+  const validMoves = engine.getValidMoves(hand, game.ends, room.variant);
   const chosen = validMoves.find((m) => m.handIndex === move.handIndex && m.side === move.side);
   if (!chosen) return { ok: false, error: 'Nước đi không hợp lệ' };
 
@@ -106,8 +155,11 @@ function passTurn(room, seat) {
   if (game.turnSeat !== seat) return { ok: false, error: 'Chưa đến lượt bạn' };
 
   const hand = game.hands[seat];
-  const validMoves = engine.getValidMoves(hand, game.ends);
+  const validMoves = engine.getValidMoves(hand, game.ends, room.variant);
   if (validMoves.length > 0) return { ok: false, error: 'Bạn vẫn còn nước đi, không thể bỏ lượt' };
+  if (room.variant === 'draw' && game.stock.length > 0) {
+    return { ok: false, error: 'Còn quân trong nọc, phải bốc quân trước khi bỏ lượt' };
+  }
 
   applyPassInternal(room, seat);
   return { ok: true };
@@ -121,13 +173,22 @@ function isBotTurn(room) {
 }
 
 // Thuc hien 1 nuoc cua bot dang toi luot. Goi tu index.js theo nhip (setTimeout).
+// Bien the Draw: neu bot khong co nuoc di va con noc, no boc 1 quan roi tra lai luot cho no
+// (khong chuyen seat) - vong lap bot o index.js se tu goi lai botAutoMove cho cung ghe do.
 function botAutoMove(room) {
   const game = room.game;
   const seat = game.turnSeat;
   const hand = game.hands[seat];
-  const move = bot.chooseBotMove(hand, game.ends, game.memory, seat, NUM_SEATS);
+  const move = bot.chooseBotMove(hand, game.ends, game.memory, seat, NUM_SEATS, room.variant);
 
   if (!move) {
+    if (room.variant === 'draw' && game.stock.length > 0) {
+      const [drawn, ...rest] = game.stock;
+      game.stock = rest;
+      game.hands[seat] = [...hand, drawn];
+      game.history.push({ seat, action: 'draw' });
+      return { seat, action: 'draw' };
+    }
     applyPassInternal(room, seat);
     return { seat, action: 'pass' };
   }
@@ -142,12 +203,13 @@ function buildPublicState(room, viewerToken) {
 
   let yourValidMoves = [];
   if (game && viewerSeat !== -1 && game.turnSeat === viewerSeat && game.status === 'playing') {
-    yourValidMoves = engine.getValidMoves(game.hands[viewerSeat], game.ends);
+    yourValidMoves = engine.getValidMoves(game.hands[viewerSeat], game.ends, room.variant);
   }
 
   return {
     roomId: room.id,
     mode: room.mode,
+    variant: room.variant,
     targetScore: room.targetScore,
     matchWins: room.matchWins,
     status: room.status,
@@ -165,6 +227,7 @@ function buildPublicState(room, viewerToken) {
     yourSeat: viewerSeat,
     yourHand: game && viewerSeat !== -1 ? game.hands[viewerSeat] : [],
     yourValidMoves,
+    stockCount: game ? game.stock.length : 0,
     board: game ? game.board : [],
     ends: game ? game.ends : null,
     turnSeat: game ? game.turnSeat : null,
@@ -178,6 +241,7 @@ module.exports = {
   startRound,
   playTile,
   passTurn,
+  drawFromStock,
   isBotTurn,
   botAutoMove,
   buildPublicState,

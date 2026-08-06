@@ -30,6 +30,18 @@
         <input type="number" id="targetScore" value="100" min="10" max="1000" />
       </div>
 
+      <div class="field">
+        <label for="variant">Biến thể luật chơi</label>
+        <select id="variant" name="variant">
+          <option value="block">Block (mặc định)</option>
+          <option value="draw">Draw (bốc nọc)</option>
+          <option value="muggins">Muggins (ăn 5)</option>
+          <option value="allthrees">All Threes (ăn 3)</option>
+          <option value="bergen">Bergen</option>
+          <option value="matador">Matador</option>
+        </select>
+      </div>
+
       <button type="submit">Tạo phòng mới</button>
       <a href="#" id="rules-link" class="rules-link">Xem luật chơi →</a>
     </form>
@@ -47,6 +59,15 @@
         <li><strong>Kiểu chặn</strong>: ván nào hết bài trước hoặc bị chặn (điểm tay thấp nhất khi cả 4 người đều không đánh được) thì thắng ván đó; ai thắng đủ số ván đã chọn trước thì thắng chung cuộc.</li>
         <li><strong>Kiểu tính điểm</strong>: người thắng ván được cộng điểm bằng tổng số chấm còn lại trong tay 3 người kia; ai đạt trước mức điểm đã chọn thì thắng chung cuộc.</li>
         <li>Bot chỉ dùng thông tin công khai (bài của nó, quân đã đánh, suy luận từ lượt bỏ của đối thủ) - không đọc được bài người khác.</li>
+      </ul>
+      <p class="sub" style="margin-top:12px"><strong>Các biến thể luật chơi</strong></p>
+      <ul class="rules-list">
+        <li><strong>Block</strong>: luật gốc như trên.</li>
+        <li><strong>Draw</strong>: mỗi người chỉ được chia 5 quân, số còn lại nằm ở nọc. Khi không có nước đi, phải bốc quân từ nọc cho đến khi bốc được quân đánh được hoặc nọc hết mới được bỏ lượt.</li>
+        <li><strong>Muggins (ăn 5)</strong>: sau mỗi nước đi, nếu tổng 2 đầu hở chia hết cho 5 thì người vừa đánh được cộng ngay số điểm đó.</li>
+        <li><strong>All Threes (ăn 3)</strong>: giống Muggins nhưng tính theo tổng chia hết cho 3.</li>
+        <li><strong>Bergen</strong>: hết bài trước được thưởng điểm cố định; nếu bị chặn, người ít điểm tay nhất thắng nhưng chỉ được thưởng điểm cố định (nhỏ hơn). Ngoài ra, nước đi nào làm 2 đầu hở trùng số nhau được thưởng điểm ngay.</li>
+        <li><strong>Matador</strong>: luật nối quân đổi khác - 2 đầu phải cộng lại bằng 7 mới nối được (không cần trùng số); quân "matador" (0-0, 1-6, 2-5, 3-4) nối được ở bất kỳ đầu nào, bất kể có cộng đủ 7 hay không.</li>
       </ul>
     </div>
   </div>
@@ -106,6 +127,8 @@
     <div id="hand-area" class="hand-area">
       <div id="your-seat-chip" class="your-seat-chip"></div>
       <div id="hand" class="hand"></div>
+      <span id="stock-counter" class="stock-counter" style="display:none"></span>
+      <button id="draw-btn" style="display:none">Bốc quân</button>
       <button id="pass-btn" style="display:none">Bỏ lượt</button>
       <div id="side-choice-popup" class="side-choice-popup" style="display:none">
         <button id="side-choice-left">A</button>

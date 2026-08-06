@@ -88,10 +88,12 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .modal-box {
   background: #fff; border-radius: 12px; padding: 16px 20px; width: 90%; max-width: 340px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  max-height: 85vh; overflow-y: auto;
 }
 .modal-header {
   display: flex; justify-content: space-between; align-items: center;
   margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee; color: var(--ink);
+  position: sticky; top: 0; background: #fff; z-index: 1;
 }
 .modal-header .icon-btn { color: var(--ink); }
 .modal-row {
@@ -233,8 +235,14 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Nut Bo luot: dat qua ben trai cua khu bai (position:absolute, khong chiem chieu cao trong
    flex column) de khi hien/an khong lam co lai chieu cao ban choi phia tren. */
-#pass-btn {
+#pass-btn, #draw-btn {
   position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+}
+
+/* Bien the Draw: bao noc con lai bao nhieu quan, dat phia tren nut Boc quan. */
+.stock-counter {
+  position: absolute; left: 8px; top: calc(50% - 26px);
+  font-size: 11px; color: #fff; opacity: 0.8;
 }
 
 /* Popup Trai/Phai - dat qua ben phai cua khu bai (position:absolute, cung ly do nhu tren),

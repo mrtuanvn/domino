@@ -15,11 +15,12 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Tạo phòng mới, trả về roomId để client điều hướng tới link mới.
 app.post('/api/rooms', (req, res) => {
-  const { mode, targetScore, matchWins } = req.body || {};
+  const { mode, targetScore, matchWins, variant } = req.body || {};
   const room = rooms.createRoom({
     mode: mode === 'score' ? 'score' : 'block',
     targetScore: Number(targetScore) > 0 ? Number(targetScore) : 100,
     matchWins: Number(matchWins) > 0 ? Number(matchWins) : 3,
+    variant: rooms.VARIANTS.includes(variant) ? variant : 'block',
   });
   res.json({ roomId: room.id });
 });
@@ -158,6 +159,22 @@ io.on('connection', (socket) => {
     if (seat === -1) return;
 
     const result = game.passTurn(room, seat);
+    if (!result.ok) {
+      socket.emit('errorMsg', result.error);
+      return;
+    }
+    broadcastRoom(roomId);
+    afterTurnChange(roomId);
+  });
+
+  socket.on('draw', () => {
+    const { roomId, token } = socket.data;
+    const room = rooms.getRoom(roomId);
+    if (!room) return;
+    const seat = rooms.findSeatByToken(room, token);
+    if (seat === -1) return;
+
+    const result = game.drawFromStock(room, seat);
     if (!result.ok) {
       socket.emit('errorMsg', result.error);
       return;

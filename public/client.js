@@ -40,6 +40,8 @@
         if (name === 'place') tone(520, 0, 0.08, 'square', 0.15);
         else if (name === 'pass') tone(180, 0, 0.18, 'sine', 0.12);
         else if (name === 'invalid') tone(110, 0, 0.2, 'sawtooth', 0.15);
+        else if (name === 'draw') tone(330, 0, 0.1, 'sine', 0.1);
+        else if (name === 'bonus') { tone(700, 0, 0.08, 'triangle', 0.16); tone(950, 0.09, 0.1, 'triangle', 0.16); }
         else if (name === 'yourTurn') { tone(660, 0, 0.1, 'triangle', 0.15); tone(880, 0.12, 0.12, 'triangle', 0.15); }
         else if (name === 'roundWin') { tone(523, 0, 0.12, 'triangle', 0.18); tone(659, 0.12, 0.12, 'triangle', 0.18); tone(784, 0.24, 0.2, 'triangle', 0.18); }
         else if (name === 'roundLose') { tone(392, 0, 0.15, 'sine', 0.13); tone(294, 0.15, 0.2, 'sine', 0.13); }
@@ -117,6 +119,7 @@
         mode,
         matchWins: document.getElementById('matchWins').value,
         targetScore: document.getElementById('targetScore').value,
+        variant: document.getElementById('variant').value,
       };
       const res = await fetch('/api/rooms', {
         method: 'POST',
@@ -174,6 +177,8 @@
       board: document.getElementById('board'),
       yourSeatChip: document.getElementById('your-seat-chip'),
       hand: document.getElementById('hand'),
+      stockCounter: document.getElementById('stock-counter'),
+      drawBtn: document.getElementById('draw-btn'),
       passBtn: document.getElementById('pass-btn'),
       sideChoicePopup: document.getElementById('side-choice-popup'),
       sideChoiceLeft: document.getElementById('side-choice-left'),
@@ -226,6 +231,7 @@
     });
     els.startBtn.addEventListener('click', () => { SoundFX.ensureCtx(); socket.emit('start-game'); });
     els.passBtn.addEventListener('click', () => { SoundFX.play('pass'); socket.emit('pass'); });
+    els.drawBtn.addEventListener('click', () => { SoundFX.play('draw'); socket.emit('draw'); });
     els.rematchBtn.addEventListener('click', () => socket.emit('rematch'));
 
     let toastTimer = null;
@@ -303,7 +309,14 @@
       const newHist = state.history || [];
       if (newHist.length && (prevHist.length === 0 || JSON.stringify(newHist[newHist.length - 1]) !== JSON.stringify(prevHist[prevHist.length - 1]))) {
         const last = newHist[newHist.length - 1];
-        if (last.seat !== state.yourSeat) SoundFX.play(last.action === 'play' ? 'place' : 'pass');
+        if (last.seat !== state.yourSeat) {
+          SoundFX.play(last.action === 'play' ? 'place' : last.action === 'draw' ? 'draw' : 'pass');
+        }
+        if (last.bonus) {
+          SoundFX.play('bonus');
+          const seatInfo = state.seats[last.seat];
+          showToast(`${seatInfo && seatInfo.name ? seatInfo.name : 'Ghế ' + (last.seat + 1)} +${last.bonus} điểm thưởng!`);
+        }
       }
       if (state.turnSeat === state.yourSeat && lastState.turnSeat !== state.yourSeat && state.roundPlaying) {
         SoundFX.play('yourTurn');
@@ -678,8 +691,14 @@
         els.hand.appendChild(el);
       });
 
-      // Nut bo luot
-      els.passBtn.style.display = isMyTurn && state.yourValidMoves.length === 0 ? 'inline-block' : 'none';
+      // Nut bo luot / boc quan (bien the Draw: phai boc het noc moi duoc bo luot)
+      const noMoves = isMyTurn && state.yourValidMoves.length === 0;
+      const isDrawVariant = state.variant === 'draw';
+      const canDraw = noMoves && isDrawVariant && state.stockCount > 0;
+      els.drawBtn.style.display = canDraw ? 'inline-block' : 'none';
+      els.passBtn.style.display = noMoves && !canDraw ? 'inline-block' : 'none';
+      els.stockCounter.style.display = isDrawVariant ? 'inline-block' : 'none';
+      if (isDrawVariant) els.stockCounter.textContent = `Nọc: ${state.stockCount}`;
 
       // Ket qua van / tran
       if (state.status === 'match-over') {

@@ -8,13 +8,17 @@ const rooms = new Map(); // roomId -> room
 
 const NUM_SEATS = 4;
 
-function createRoom({ mode = 'block', targetScore = 100, matchWins = 3 }) {
+// Bien the luat choi 1 van (doc lap voi `mode` - mode chi quyet dinh cach tinh thang chung cuoc).
+const VARIANTS = ['block', 'draw', 'muggins', 'allthrees', 'bergen', 'matador'];
+
+function createRoom({ mode = 'block', targetScore = 100, matchWins = 3, variant = 'block' }) {
   let id = genRoomId();
   while (rooms.has(id)) id = genRoomId();
 
   const room = {
     id,
     mode, // 'block' | 'score'
+    variant: VARIANTS.includes(variant) ? variant : 'block',
     targetScore,
     matchWins,
     seats: Array.from({ length: NUM_SEATS }, () => null), // { token, name, type: 'human'|'bot', connected }
@@ -76,6 +80,7 @@ function removeRoom(roomId) {
 
 module.exports = {
   NUM_SEATS,
+  VARIANTS,
   createRoom,
   getRoom,
   joinRoom,
