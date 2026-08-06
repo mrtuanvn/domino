@@ -369,14 +369,21 @@
         return cur;
       }
 
-      // Quan tiep theo theo huong `dir` co tran qua canh trong (ring.* - thin, chua cho canh
-      // vuong goc sap toi) khong - neu co thi phai re truoc khi dat quan, chua dat.
+      // Khoang dem giua vong xoan trong va vong ngoai: khong ap dung cho khop noi that giua
+      // 2 quan lien tiep (anchorFor van khop khit nhu cu), chi lam vong trong dung lui vao
+      // som hon mot chut de khong bao gio cham sat vao hang quan cua vong truoc (nhin nhu
+      // "dinh chum" du ve mat toa do khong he chong lan).
+      const RING_GAP = thin * 0.35;
+
+      // Quan tiep theo theo huong `dir` co tran qua canh trong (ring.* - thin - RING_GAP, chua
+      // cho canh vuong goc sap toi) khong - neu co thi phai re truoc khi dat quan, chua dat.
       function overflows(dir) {
         const box = spiralBox(anchorFor(cursor, dir, prevBox, prevDir), dir, long, thin);
-        if (dir === 0) return box.x + box.w > ring.right - thin + 0.01;
-        if (dir === 1) return box.y + box.h > ring.bottom - thin + 0.01;
-        if (dir === 2) return box.x < ring.left + thin - 0.01;
-        return box.y < ring.top + thin - 0.01;
+        const margin = thin + RING_GAP;
+        if (dir === 0) return box.x + box.w > ring.right - margin + 0.01;
+        if (dir === 1) return box.y + box.h > ring.bottom - margin + 0.01;
+        if (dir === 2) return box.x < ring.left + margin - 0.01;
+        return box.y < ring.top + margin - 0.01;
       }
 
       function place(entry, dir, anchor) {
