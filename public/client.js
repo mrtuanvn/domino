@@ -180,6 +180,7 @@
       stockCounter: document.getElementById('stock-counter'),
       drawBtn: document.getElementById('draw-btn'),
       passBtn: document.getElementById('pass-btn'),
+      pauseBtn: document.getElementById('pause-btn'),
       sideChoicePopup: document.getElementById('side-choice-popup'),
       sideChoiceLeft: document.getElementById('side-choice-left'),
       sideChoiceRight: document.getElementById('side-choice-right'),
@@ -233,6 +234,17 @@
     els.passBtn.addEventListener('click', () => { SoundFX.play('pass'); socket.emit('pass'); });
     els.drawBtn.addEventListener('click', () => { SoundFX.play('draw'); socket.emit('draw'); });
     els.rematchBtn.addEventListener('click', () => socket.emit('rematch'));
+    els.pauseBtn.addEventListener('click', () => {
+      socket.emit(lastState && lastState.paused ? 'resume' : 'pause');
+    });
+
+    // Canh bao khi roi trang luc dang choi dang do - khong chan duoc 100% nhung nhac truoc.
+    window.addEventListener('beforeunload', (e) => {
+      if (lastState && lastState.roundPlaying) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
 
     let toastTimer = null;
     function showToast(msg) {
@@ -567,7 +579,7 @@
     }
 
     // 1 muc gon trong hang doi thu - chi chu, khong logo/avatar
-    function makeOpponentItem(s, isTurn) {
+    function makeOpponentItem(s, isTurn, scoreVal) {
       const item = document.createElement('div');
       item.className = 'opponent-item' + (isTurn ? ' turn' : '') + (s.name ? '' : ' empty');
       if (!s.name) {
@@ -577,9 +589,13 @@
       const nameEl = document.createElement('span');
       nameEl.className = 'opp-name';
       nameEl.textContent = `${s.name}${s.connected ? '' : ' (mất kết nối)'}`;
+      const scoreEl = document.createElement('span');
+      scoreEl.className = 'opp-score';
+      scoreEl.textContent = `${scoreVal} điểm`;
       const metaEl = document.createElement('span');
       metaEl.textContent = `${s.handCount} quân`;
       item.appendChild(nameEl);
+      item.appendChild(scoreEl);
       item.appendChild(metaEl);
       return item;
     }
@@ -621,10 +637,13 @@
       const seatByRel = {};
       state.seats.forEach((s, idx) => { seatByRel[relSeat(idx)] = { ...s, idx }; });
 
+      const scoreList = state.mode === 'score' ? state.scores : state.roundWins;
+
       els.opponentsRow.innerHTML = '';
       [seatByRel[1], seatByRel[2], seatByRel[3]].forEach((s) => {
         const info = s || {};
-        els.opponentsRow.appendChild(makeOpponentItem(info, !!(s && state.turnSeat === s.idx)));
+        const scoreVal = s ? scoreList[s.idx] : 0;
+        els.opponentsRow.appendChild(makeOpponentItem(info, !!(s && state.turnSeat === s.idx), scoreVal));
       });
 
       // Ban co - xep xoan oc trong khung that cua ban, uu tien khong gian toi da
@@ -633,6 +652,8 @@
       // Chi bao luot (dem nguoc duoc noi them boi startCountdownFor)
       if (state.status === 'match-over') {
         els.turnIndicator.dataset.base = 'Trận đấu kết thúc!';
+      } else if (state.paused) {
+        els.turnIndicator.dataset.base = '⏸ Ván đang tạm dừng';
       } else if (!state.roundPlaying) {
         els.turnIndicator.dataset.base = 'Chuẩn bị ván mới...';
       } else if (state.turnSeat !== null) {
@@ -641,15 +662,20 @@
       }
       els.turnIndicator.textContent = els.turnIndicator.dataset.base;
 
+      // Nut tam dung: bat ky ai cung bam duoc trong luc dang choi (khong phai luc cho van moi/het tran)
+      els.pauseBtn.style.display = state.roundPlaying ? 'inline-block' : 'none';
+      els.pauseBtn.textContent = state.paused ? '▶ Tiếp tục' : '⏸ Tạm dừng';
+
       // O ban than
-      const isMyTurn = state.yourSeat !== -1 && state.turnSeat === state.yourSeat && state.roundPlaying;
+      const isMyTurn = state.yourSeat !== -1 && state.turnSeat === state.yourSeat && state.roundPlaying && !state.paused;
       const youSeatInfo = state.seats[state.yourSeat] || { name: '', type: 'human' };
       els.yourSeatChip.classList.toggle('turn', isMyTurn);
       els.yourSeatChip.innerHTML = '';
       els.yourSeatChip.appendChild(makeAvatar(youSeatInfo));
       const chipName = document.createElement('span');
       chipName.className = 'seat-name-pill';
-      chipName.textContent = `(Bạn) ${youSeatInfo.name || ''}`;
+      const yourScoreVal = state.yourSeat !== -1 ? scoreList[state.yourSeat] : 0;
+      chipName.textContent = `(Bạn) ${youSeatInfo.name || ''} · ${yourScoreVal} điểm`;
       els.yourSeatChip.appendChild(chipName);
 
       // Bai tren tay - xep dung, keo tha de sap xep lai

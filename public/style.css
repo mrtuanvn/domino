@@ -136,6 +136,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   background: rgba(255,255,255,0.08); border-radius: 8px; padding: 2px 8px;
 }
 .opponent-item .opp-name { display: block; font-weight: 700; color: #fff; }
+.opponent-item .opp-score { display: block; color: #ffd479; }
 .opponent-item.turn { background: rgba(212,160,23,0.35); color: #fff; }
 .opponent-item.empty { opacity: 0.5; }
 
@@ -237,6 +238,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
    flex column) de khi hien/an khong lam co lai chieu cao ban choi phia tren. */
 #pass-btn, #draw-btn {
   position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+}
+#pause-btn {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%); margin-left: 0;
 }
 
 /* Bien the Draw: bao noc con lai bao nhieu quan, dat phia tren nut Boc quan. */

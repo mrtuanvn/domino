@@ -27,6 +27,7 @@ function createRoom({ mode = 'block', targetScore = 100, matchWins = 3, variant 
     roundWins: Array.from({ length: NUM_SEATS }, () => 0),
     createdAt: Date.now(),
     status: 'lobby', // lobby | playing | match-over
+    paused: false,
   };
   rooms.set(id, room);
   return room;

@@ -57,7 +57,7 @@ function clearTurnTimer(room) {
 // va tu dong chuyen sang van moi khi 1 van ket thuc.
 function afterTurnChange(roomId) {
   const room = rooms.getRoom(roomId);
-  if (!room || !room.game) return;
+  if (!room || !room.game || room.paused) return;
   clearTurnTimer(room);
 
   if (room.game.status === 'round-over') {
@@ -66,7 +66,7 @@ function afterTurnChange(roomId) {
     if (room.status === 'match-over') return; // cho nguoi choi bam "Choi lai"
     setTimeout(() => {
       const r2 = rooms.getRoom(roomId);
-      if (!r2 || r2.status === 'match-over') return;
+      if (!r2 || r2.status === 'match-over' || r2.paused) return;
       game.startRound(r2);
       broadcastRoom(roomId);
       afterTurnChange(roomId);
@@ -79,6 +79,7 @@ function afterTurnChange(roomId) {
     broadcastRoom(roomId);
     setTimeout(() => {
       const r2 = rooms.getRoom(roomId);
+      if (r2 && r2.paused) return;
       if (!r2 || !r2.game || r2.game.status !== 'playing') {
         afterTurnChange(roomId);
         return;
@@ -95,7 +96,7 @@ function afterTurnChange(roomId) {
   broadcastRoom(roomId);
   room.turnTimer = setTimeout(() => {
     const r2 = rooms.getRoom(roomId);
-    if (!r2 || !r2.game || r2.game.status !== 'playing') return;
+    if (!r2 || !r2.game || r2.game.status !== 'playing' || r2.paused) return;
     game.botAutoMove(r2); // het gio - may tu danh thay nguoi choi
     broadcastRoom(roomId);
     afterTurnChange(roomId);
@@ -139,6 +140,7 @@ io.on('connection', (socket) => {
     const { roomId, token } = socket.data;
     const room = rooms.getRoom(roomId);
     if (!room) return;
+    if (room.paused) { socket.emit('errorMsg', 'Ván đang tạm dừng'); return; }
     const seat = rooms.findSeatByToken(room, token);
     if (seat === -1) return;
 
@@ -155,6 +157,7 @@ io.on('connection', (socket) => {
     const { roomId, token } = socket.data;
     const room = rooms.getRoom(roomId);
     if (!room) return;
+    if (room.paused) { socket.emit('errorMsg', 'Ván đang tạm dừng'); return; }
     const seat = rooms.findSeatByToken(room, token);
     if (seat === -1) return;
 
@@ -171,6 +174,7 @@ io.on('connection', (socket) => {
     const { roomId, token } = socket.data;
     const room = rooms.getRoom(roomId);
     if (!room) return;
+    if (room.paused) { socket.emit('errorMsg', 'Ván đang tạm dừng'); return; }
     const seat = rooms.findSeatByToken(room, token);
     if (seat === -1) return;
 
@@ -179,6 +183,30 @@ io.on('connection', (socket) => {
       socket.emit('errorMsg', result.error);
       return;
     }
+    broadcastRoom(roomId);
+    afterTurnChange(roomId);
+  });
+
+  // Tam dung: bat ky nguoi choi nao trong phong cung bam duoc, dung dong ho + dung bot tu danh.
+  socket.on('pause', () => {
+    const { roomId, token } = socket.data;
+    const room = rooms.getRoom(roomId);
+    if (!room || !room.game || room.game.status !== 'playing' || room.paused) return;
+    if (rooms.findSeatByToken(room, token) === -1) return;
+
+    room.paused = true;
+    clearTurnTimer(room);
+    room.turnDeadline = null;
+    broadcastRoom(roomId);
+  });
+
+  socket.on('resume', () => {
+    const { roomId, token } = socket.data;
+    const room = rooms.getRoom(roomId);
+    if (!room || !room.paused) return;
+    if (rooms.findSeatByToken(room, token) === -1) return;
+
+    room.paused = false;
     broadcastRoom(roomId);
     afterTurnChange(roomId);
   });

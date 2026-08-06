@@ -213,6 +213,7 @@ function buildPublicState(room, viewerToken) {
     targetScore: room.targetScore,
     matchWins: room.matchWins,
     status: room.status,
+    paused: !!room.paused,
     roundPlaying: !!(game && game.status === 'playing'),
     scores: room.scores,
     roundWins: room.roundWins,
