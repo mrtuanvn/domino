@@ -89,6 +89,18 @@
     const form = document.getElementById('create-form');
     const matchWinsField = document.getElementById('matchWins-field');
     const targetScoreField = document.getElementById('targetScore-field');
+    const rulesLink = document.getElementById('rules-link');
+    const rulesModal = document.getElementById('rules-modal');
+    const rulesCloseBtn = document.getElementById('rules-close-btn');
+
+    rulesLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      rulesModal.style.display = 'flex';
+    });
+    rulesCloseBtn.addEventListener('click', () => { rulesModal.style.display = 'none'; });
+    rulesModal.addEventListener('click', (e) => {
+      if (e.target === rulesModal) rulesModal.style.display = 'none';
+    });
 
     form.querySelectorAll('input[name=mode]').forEach((r) => {
       r.addEventListener('change', () => {

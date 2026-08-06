@@ -31,7 +31,24 @@
       </div>
 
       <button type="submit">Tạo phòng mới</button>
+      <a href="#" id="rules-link" class="rules-link">Xem luật chơi →</a>
     </form>
+  </div>
+
+  <div id="rules-modal" class="modal-overlay" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <strong>Luật chơi</strong>
+        <button id="rules-close-btn" class="icon-btn">✕</button>
+      </div>
+      <ul class="rules-list">
+        <li>Bộ 28 quân (đôi lục), 4 người chơi (người thật + Bot), mỗi người 7 quân, không có nọc.</li>
+        <li>Người cầm đôi cao nhất (ưu tiên lục lục) đi trước.</li>
+        <li><strong>Kiểu chặn</strong>: ván nào hết bài trước hoặc bị chặn (điểm tay thấp nhất khi cả 4 người đều không đánh được) thì thắng ván đó; ai thắng đủ số ván đã chọn trước thì thắng chung cuộc.</li>
+        <li><strong>Kiểu tính điểm</strong>: người thắng ván được cộng điểm bằng tổng số chấm còn lại trong tay 3 người kia; ai đạt trước mức điểm đã chọn thì thắng chung cuộc.</li>
+        <li>Bot chỉ dùng thông tin công khai (bài của nó, quân đã đánh, suy luận từ lượt bỏ của đối thủ) - không đọc được bài người khác.</li>
+      </ul>
+    </div>
   </div>
 </div>
 
