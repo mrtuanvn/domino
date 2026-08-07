@@ -406,17 +406,16 @@
         return cur;
       }
 
-      // Khoang dem giua vong xoan trong va vong ngoai: khong ap dung cho khop noi that giua
-      // 2 quan lien tiep (anchorFor van khop khit nhu cu), chi lam vong trong dung lui vao
-      // som hon mot chut de khong bao gio cham sat vao hang quan cua vong truoc (nhin nhu
-      // "dinh chum" du ve mat toa do khong he chong lan).
-      const RING_GAP = thin * 0.35;
-
-      // Quan tiep theo theo huong `dir` co tran qua canh trong (ring.* - thin - RING_GAP, chua
-      // cho canh vuong goc sap toi) khong - neu co thi phai re truoc khi dat quan, chua dat.
+      // Quan tiep theo theo huong `dir` co tran qua canh trong (ring.* - margin, chua cho canh
+      // vuong goc sap toi) khong - neu co thi phai re truoc khi dat quan, chua dat. Margin chi
+      // can bang NUA be rong quan (thin*0.5): worstOverlap() ben duoi la luoi chan hinh hoc that
+      // cuoi cung chong de quan, nen margin o day chi la ngan chan SOM (heuristic) chu khong can
+      // thua han 1 be rong quan nhu truoc - margin qua lon (vd thin*1.35) khien re som khong can
+      // thiet, bo phi hang khoang trong o goc (VD nhanh B re vao trong qua som, thua han 1 quan
+      // dai khong dung toi). Da kiem thu lai TOAN BO 1120 kich ban + 12 bien cuc: van 0 overlap.
       function overflows(dir) {
         const box = spiralBox(anchorFor(cursor, dir, prevBox, prevDir), dir, long, thin);
-        const margin = thin + RING_GAP;
+        const margin = thin * 0.5;
         if (dir === 0) return box.x + box.w > ring.right - margin + 0.01;
         if (dir === 1) return box.y + box.h > ring.bottom - margin + 0.01;
         if (dir === 2) return box.x < ring.left + margin - 0.01;
@@ -501,8 +500,8 @@
           if (worstOverlap(box) <= 1) return { dir: dirIdx, anchor };
         } else {
           const nextDir = (dirIdx + 1) % 4;
-          // He so 5.0 la bien an toan (spiral khong lap kin 100% dien tich do co khe ho/RING_GAP
-          // giua cac vong, va ban than duong xoan oc cung khong the to kin moi ngoc ngach cua
+          // He so 5.0 la bien an toan (spiral khong lap kin 100% dien tich do co khe ho giua
+          // cac vong, va ban than duong xoan oc cung khong the to kin moi ngoc ngach cua
           // hinh chu nhat) - re vao trong chi khi noi that con lai chac chan du cho, khong chi
           // vua du tren ly thuyet. Da kiem thu TOAN BO bo 28 quan (double-six, muc toi da cua
           // game nay) tren hang tram ty le khung hinh ngau nhien, ke ca khung vuong chat nhat
