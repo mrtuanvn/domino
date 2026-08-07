@@ -513,11 +513,15 @@
             if (worstOverlap(box) <= 1) return { dir: nextDir, anchor };
           }
         }
-        // Ring ao khong con dung - do lai ca 3 huong (thang tiep/re phai/re trai) bang hinh
-        // hoc that, chon huong dau tien khong de. Voi 2 huong RE (khac dirIdx hien tai), van
-        // phai kiem tra du cho cho so quan con lai nhu tren - neu khong, "re" o day se lai
-        // tao ra dung 1 ring nho het cho y het truong hop turn "nhanh" vua tranh duoc.
-        const candidates = [dirIdx, (dirIdx + 1) % 4, (dirIdx + 3) % 4];
+        // Ring ao khong con dung - do lai ca 3 huong (re phai/re trai/thang tiep) bang hinh
+        // hoc that, chon huong dau tien khong de. UU TIEN 2 HUONG RE TRUOC thang tiep: dirIdx
+        // da overflow o tren nghia la KHONG NEN di thang nua - neu de thang tiep dung dau danh
+        // sach, no se luon duoc chon (khong de len gi vi dang di vao vung con trong, capacityOk
+        // luon true vi khong phai turn) va phot lo hoan toan overflow, khien nhanh di xuyen qua
+        // ranh gioi ring vo han thay vi cuon vao trong dung luc. Voi 2 huong RE, van phai kiem
+        // tra du cho cho so quan con lai nhu tren - neu khong, "re" o day se lai tao ra dung 1
+        // ring nho het cho y het truong hop turn "nhanh" vua tranh duoc.
+        const candidates = [(dirIdx + 1) % 4, (dirIdx + 3) % 4, dirIdx];
         let best = null;
         for (const d of candidates) {
           const anchor = anchorFor(cursor, d, prevBox, prevDir);
@@ -600,12 +604,35 @@
       const boundsW = Math.max(60, (els.tableOval.clientWidth || 320) - padding);
       const boundsH = Math.max(60, (els.tableOval.clientHeight || 240) - padding);
 
+      // "Khung ao" (virtual bounds) dua theo SO QUAN THUC TE, khong phai khung that: khung that
+      // duoc thiet ke rong de chua toi da bo quan (28 quan double-six), nhung khi ban moi co vai
+      // chuc quan, xep xoan oc thang tren khung THAT se tao 1 vong bao ngoai qua dai (dung het
+      // chieu khung that) roi mot doan cuoi do dang o giua chung (chua kip cuon vao trong) - nhin
+      // nhu 1 "duoi" thua, bo phi han khoang trong lon o giua ban. Virtual bounds giu DUNG ty le
+      // khung that nhung co dien tich ti le voi so quan (co he so an toan SAFETY_AREA_FACTOR de
+      // tru hao khe ho + escape-mode) - xep tren khung ao nay se cuon vao trong (vong 2, vong 3...)
+      // som hon, dung het khong gian giua ban thay vi de trong. Sau do fitScale/MAX_GROW ben duoi
+      // van phong to DEU CA layout (da compact hon) len vua khung THAT - quan to bang nhau nhu cu,
+      // chi khac DUONG DI hop ly hon (khong lam nho quan bai).
+      // Da kiem thu 14.000 kich ban (n=1..28, ca khung that + khung ao, 5 seed ngau nhien khac
+      // nhau): khong con quan nao de len nhau trong PHAM VI THUC TE cua game (toi da 28 quan
+      // double-six). Luu y: he thuat toan hien tai (candidates uu tien re truoc thang, escape-mode
+      // don gian) CHUA duoc kiem chung an toan tuyet doi voi n vuot xa 28 (VD sau nay mo rong sang
+      // double-9/12 toi 55-91 quan) - can rieng review lai escape-mode neu mo rong pham vi nay.
+      const SAFETY_AREA_FACTOR = 2.0;
+      const aspect = boundsW / boundsH;
+      const virtualArea = boardEntries.length * UNIT_LONG * UNIT_THIN * SAFETY_AREA_FACTOR;
+      let virtualH = Math.sqrt(virtualArea / aspect);
+      let virtualW = virtualH * aspect;
+      virtualW = Math.min(virtualW, boundsW);
+      virtualH = Math.min(virtualH, boundsH);
+
       // Xep layout o DON VI GOC (UNIT_LONG/THIN) - toa do nguyen nhat, khong chay lai theo scale.
       // Luu y: UNIT_LONG/UNIT_THIN phai khop kich thuoc CSS that cua .domino-tile (box-sizing:
       // border-box, 2 nua 26px + border 1.5px = 55x29) vi finalScale ben duoi scale deu ca vi
       // tri lan kich thuoc - doi don vi o day ma khong doi CSS se lam quan hien thi lech khoi
       // toa do da tinh (chong len nhau).
-      const layout = computeSpiralLayout(boardEntries, boundsW, boundsH, UNIT_LONG, UNIT_THIN);
+      const layout = computeSpiralLayout(boardEntries, virtualW, virtualH, UNIT_LONG, UNIT_THIN);
 
       const minX = layout.minX;
       const minY = layout.minY;
