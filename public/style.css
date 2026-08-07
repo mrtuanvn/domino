@@ -239,9 +239,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 #pass-btn, #draw-btn {
   position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
 }
-#pause-btn {
-  position: absolute; right: 8px; top: 50%; transform: translateY(-50%); margin-left: 0;
-}
 
 /* Bien the Draw: bao noc con lai bao nhieu quan, dat phia tren nut Boc quan. */
 .stock-counter {

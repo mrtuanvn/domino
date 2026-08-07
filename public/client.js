@@ -437,18 +437,126 @@
         return { x: box.x, y: box.y };
       }
 
-      // Xep tung quan bam ring hien tai; chi cho phep RE 1 LAN moi quan (dung nhu 1 xoan oc
-      // that su chi re o goc). Neu van tran ca sau khi re, nghia la ring da het cho (chi xay
-      // ra khi ban qua nho so voi so quan) - dung lai o day, phan con lai xu ly rieng ben duoi.
-      let exhaustedAt = boardEntries.length;
-      for (let i = 0; i < boardEntries.length; i++) {
-        if (overflows(dirIdx)) {
-          dirIdx = (dirIdx + 1) % 4;
-          if (overflows(dirIdx)) { exhaustedAt = i; break; }
-        }
+      function overlapArea(a, b) {
+        const ox = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+        const oy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+        return ox * oy;
+      }
 
-        const anchor = anchorFor(cursor, dirIdx, prevBox, prevDir);
+      function worstOverlap(box) {
+        let worst = 0;
+        for (const p of positions) worst = Math.max(worst, overlapArea(p, box));
+        return worst;
+      }
+
+      // Khung bao (bounding box) cua TOAN BO quan da xep tinh den hien tai - dung de biet
+      // "tam cum" quan dang o dau, phuc vu buoc thoat hiem ben duoi khi vong xoan trong da
+      // qua chat (khong con huong nao trong 3 huong thuong ma khong de len quan cu).
+      let bboxMinX = Infinity, bboxMinY = Infinity, bboxMaxX = -Infinity, bboxMaxY = -Infinity;
+      function trackBBox(box) {
+        bboxMinX = Math.min(bboxMinX, box.x);
+        bboxMinY = Math.min(bboxMinY, box.y);
+        bboxMaxX = Math.max(bboxMaxX, box.x + box.w);
+        bboxMaxY = Math.max(bboxMaxY, box.y + box.h);
+      }
+
+      // Dien tich con lai BEN TRONG ring hien tai, quy doi ra "so quan" toi da co the chua vua
+      // (khong tinh khe ho giua cac quan). Dung de tu choi re vao trong (dong vong) neu phan
+      // noi that sap toi khong du cho so quan CON LAI - tranh tao "vong donut" khep kin ma
+      // ruot ben trong khong du rong, buoc phai de quan len nhau khi khong con duong lui.
+      function interiorCapacity() {
+        const w = Math.max(0, ring.right - ring.left);
+        const h = Math.max(0, ring.bottom - ring.top);
+        return (w * h) / (long * thin);
+      }
+
+      // Nhu interiorCapacity() nhung tinh THEO SAU khi ap dung canh ring se bi cap nhat boi
+      // huong `dir` (mo phong dung 1 buoc "if (dir===0) ring.top=box.y ..." o cuoi vong lap
+      // chinh) - dung de kiem tra truoc khi thuc su re, tranh dong vong roi moi phat hien het
+      // cho (giong nhu truong hop turn "nhanh" da xu ly, nhung ap dung them cho ca vong lap
+      // 3-huong du phong, vi do cung la 1 dang re lam hep ring y het).
+      function interiorCapacityAfter(dir, box) {
+        const r = { ...ring };
+        if (dir === 0) r.top = box.y;
+        else if (dir === 1) r.right = box.x;
+        else if (dir === 2) r.bottom = box.y;
+        else r.left = box.x;
+        const w = Math.max(0, r.right - r.left);
+        const h = Math.max(0, r.bottom - r.top);
+        return (w * h) / (long * thin);
+      }
+
+      // Chon huong cho quan tiep theo: uu tien theo luat xoan oc chuan (thang tiep, chi re khi
+      // canh ring ao bao het cho VA phan con lai du rong cho so quan chua xep), nhung LUON xac
+      // nhan lai bang hinh hoc THAT (khong chi dua vao ring) truoc khi chot - vi ring chi la 1
+      // hinh chu nhat dang thu hep dan vao trong, khong "nho" duoc het moi quan da xep tu cac
+      // vong truoc do. Sau nhieu vong, huong ring tuong la con cho co the that ra da bi 1 quan
+      // tu vong ngoai chiem mat (nhanh B "giao" lai vao vung da di qua) - luc do thu lan luot
+      // thang tiep / re phai / re trai va chon huong dau tien khong de len quan nao, dam bao
+      // KHONG BAO GIO ve quan chong len nhau.
+      function pickDirection(remaining) {
+        if (!overflows(dirIdx)) {
+          const anchor = anchorFor(cursor, dirIdx, prevBox, prevDir);
+          const box = spiralBox(anchor, dirIdx, long, thin);
+          if (worstOverlap(box) <= 1) return { dir: dirIdx, anchor };
+        } else {
+          const nextDir = (dirIdx + 1) % 4;
+          // He so 5.0 la bien an toan (spiral khong lap kin 100% dien tich do co khe ho/RING_GAP
+          // giua cac vong, va ban than duong xoan oc cung khong the to kin moi ngoc ngach cua
+          // hinh chu nhat) - re vao trong chi khi noi that con lai chac chan du cho, khong chi
+          // vua du tren ly thuyet. Da kiem thu TOAN BO bo 28 quan (double-six, muc toi da cua
+          // game nay) tren hang tram ty le khung hinh ngau nhien, ke ca khung vuong chat nhat
+          // (1..28 quan, 1120 kich ban) - khong con quan nao de len nhau. He so < 5.0 (VD 2.6)
+          // con ghi nhan overlap (nhanh B de nguoc len chinh no) o mot so khung chat.
+          if (!overflows(nextDir) && interiorCapacity() >= remaining * 5.0) {
+            const anchor = anchorFor(cursor, nextDir, prevBox, prevDir);
+            const box = spiralBox(anchor, nextDir, long, thin);
+            if (worstOverlap(box) <= 1) return { dir: nextDir, anchor };
+          }
+        }
+        // Ring ao khong con dung - do lai ca 3 huong (thang tiep/re phai/re trai) bang hinh
+        // hoc that, chon huong dau tien khong de. Voi 2 huong RE (khac dirIdx hien tai), van
+        // phai kiem tra du cho cho so quan con lai nhu tren - neu khong, "re" o day se lai
+        // tao ra dung 1 ring nho het cho y het truong hop turn "nhanh" vua tranh duoc.
+        const candidates = [dirIdx, (dirIdx + 1) % 4, (dirIdx + 3) % 4];
+        let best = null;
+        for (const d of candidates) {
+          const anchor = anchorFor(cursor, d, prevBox, prevDir);
+          const box = spiralBox(anchor, d, long, thin);
+          const overlap = worstOverlap(box);
+          const isTurn = d !== dirIdx;
+          const capacityOk = !isTurn || interiorCapacityAfter(d, box) >= (remaining - 1) * 5.0;
+          if (overlap <= 1 && capacityOk) return { dir: d, anchor };
+          if (!best || overlap < best.overlap) best = { dir: d, anchor, overlap };
+        }
+        // Ca 3 huong khong-quay-dau deu de (cuc hiem: vong xoan trong da qua chat so voi
+        // "mieng" con lai) - nhanh B gio can THOAT hoan toan ra khoi cum quan da xep thay vi
+        // co nhoi tiep vao giua, ke ca phai quay dau. Uu tien huong dua cursor ra xa TAM cum
+        // quan nhat (huong do gan nhu chac chan con khoang trong that su), thu ca 4 huong.
+        const cx = (bboxMinX + bboxMaxX) / 2;
+        const cy = (bboxMinY + bboxMaxY) / 2;
+        const escapeScore = [
+          cursor.x - cx, // 0 = Phai: cang xa tam ve phia phai cang tot
+          cursor.y - cy, // 1 = Xuong
+          cx - cursor.x, // 2 = Trai
+          cy - cursor.y, // 3 = Len
+        ];
+        const escapeDirs = [0, 1, 2, 3].sort((a, b) => escapeScore[b] - escapeScore[a]);
+        for (const d of escapeDirs) {
+          const anchor = anchorFor(cursor, d, prevBox, prevDir);
+          const box = spiralBox(anchor, d, long, thin);
+          const overlap = worstOverlap(box);
+          if (overlap <= 1) return { dir: d, anchor };
+          if (overlap < best.overlap) best = { dir: d, anchor, overlap };
+        }
+        return best;
+      }
+
+      for (let i = 0; i < boardEntries.length; i++) {
+        const { dir, anchor } = pickDirection(boardEntries.length - i);
+        dirIdx = dir;
         const box = place(boardEntries[i], dirIdx, anchor);
+        trackBBox(box);
         // Cap nhat DUNG 1 canh cua ring ung voi huong vua di, bang toa do that vua dat - canh
         // nay se duoc dung lai boi vong xoan ben trong (hoac boi buoc dong vong hien tai).
         if (dirIdx === 0) ring.top = box.y;
@@ -456,42 +564,6 @@
         else if (dirIdx === 2) ring.bottom = box.y;
         else ring.left = box.x;
 
-        cursor = advanceCursor(dirIdx, box);
-        prevBox = box;
-        prevDir = dirIdx;
-      }
-
-      function overlapArea(a, b) {
-        const ox = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
-        const oy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-        return ox * oy;
-      }
-
-      // Ring qua chat (hiem: man hinh rat nho + bai rat dai) - quan van phai noi tiep quan
-      // truoc (day quan bai khong bao gio duoc dut doan de lo lung), nen thu: di thang tiep,
-      // re phai, re trai - KHONG BAO GIO quay dau 180 do (chac chan de len chinh quan vua dat).
-      // Uu tien huong vua khong de len quan da xep VUA khong tran ra ngoai khung that cua ban
-      // (kiem tra toa do that); chi chap nhan tran khung khi khong con lua chon nao khac (rat
-      // hiem) - neu khong thi quan se troi ra ngoai bang, gay "ve tran" nhu bug da gap.
-      function inBounds(box) {
-        return box.x >= -0.01 && box.y >= -0.01 && box.x + box.w <= boundsW + 0.01 && box.y + box.h <= boundsH + 0.01;
-      }
-      for (let i = exhaustedAt; i < boardEntries.length; i++) {
-        const base = prevDir === null ? dirIdx : prevDir;
-        const candidates = [base, (base + 1) % 4, (base + 3) % 4];
-        let chosenDir = candidates[0];
-        let chosenAnchor = anchorFor(cursor, chosenDir, prevBox, prevDir);
-        let fallback = null;
-        for (const d of candidates) {
-          const anchor = anchorFor(cursor, d, prevBox, prevDir);
-          const box = spiralBox(anchor, d, long, thin);
-          if (positions.some((p) => overlapArea(p, box) > 0.5)) continue;
-          if (!fallback) fallback = { dir: d, anchor };
-          if (inBounds(box)) { chosenDir = d; chosenAnchor = anchor; fallback = null; break; }
-        }
-        if (fallback) { chosenDir = fallback.dir; chosenAnchor = fallback.anchor; }
-        dirIdx = chosenDir;
-        const box = place(boardEntries[i], dirIdx, chosenAnchor);
         cursor = advanceCursor(dirIdx, box);
         prevBox = box;
         prevDir = dirIdx;
