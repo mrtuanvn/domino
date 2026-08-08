@@ -178,6 +178,32 @@ function resolveWinByEmptyHand(seat, hands, opts = {}) {
   return { winnerSeats: [seat], points, reason: 'domino', pips };
 }
 
+// Ket qua cuoi van cho mode 'block' (thay the resolveBlockedRound/resolveWinByEmptyHand khi
+// room.mode === 'block'): xep hang ca 4 nguoi theo tong diem tay con lai (it nhat = hang cao
+// nhat; nguoi het bai truoc luon co 0 diem nen chac chan hang nhat). Hoa diem thi ai TOI LUOT
+// DANH SOM HON trong van nay (offset gan startSeat hon theo vong xoay) duoc xep hang cao hon -
+// vi offset luon khac nhau giua 4 ghe trong 1 van, tieu chi nay luon phan dinh duoc thu tu ro
+// rang, khong con tinh huong hoa that su nua. Diem co dinh theo hang: nhat +2, nhi +1, ba -1,
+// chot -2 (dung chung cho moi ly do ket thuc van - het bai truoc hay bi ca ban).
+const BLOCK_RANK_POINTS = [2, 1, -1, -2];
+
+function resolveBlockRanking(hands, startSeat) {
+  const n = hands.length;
+  const pips = hands.map(pipSum);
+  const offsetFromStart = (seat) => (seat - startSeat + n) % n;
+  const order = hands.map((_, seat) => seat).sort((a, b) => {
+    if (pips[a] !== pips[b]) return pips[a] - pips[b];
+    return offsetFromStart(a) - offsetFromStart(b);
+  });
+  const ranking = order.map((seat, i) => ({
+    seat,
+    pip: pips[seat],
+    rank: i + 1,
+    points: BLOCK_RANK_POINTS[i] != null ? BLOCK_RANK_POINTS[i] : 0,
+  }));
+  return { ranking, reason: 'block-ranking', pips };
+}
+
 const BERGEN_POINTS = { domino: 2, blocked: 1, doubleEnds: 2 };
 const MUGGINS_DIVISOR = 5;
 const ALLTHREES_DIVISOR = 3;
@@ -196,6 +222,7 @@ module.exports = {
   removeTileFromHand,
   resolveBlockedRound,
   resolveWinByEmptyHand,
+  resolveBlockRanking,
   computeEndsScore,
   isMatadorTile,
   MATADOR_TILES,

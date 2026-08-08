@@ -43,7 +43,6 @@ function broadcastRoom(roomId) {
 }
 
 const BOT_MOVE_DELAY_MS = 700;
-const NEXT_ROUND_DELAY_MS = 3500;
 const TURN_TIME_MS = 20000;
 
 function clearTurnTimer(room) {
@@ -53,8 +52,24 @@ function clearTurnTimer(room) {
   }
 }
 
-// Goi sau moi thay doi luot: xu ly vong lap bot, dem nguoc luot nguoi,
-// va tu dong chuyen sang van moi khi 1 van ket thuc.
+// Tat ca nguoi that DANG KET NOI da bam "San sang" chua? Dieu kien de tiep tuc sau khi tam
+// dung: ghe trong/bot luon coi la san sang; nguoi that DANG KET NOI phai chinh tay bam "San
+// sang" (ke ca nguoi vua reconnect - reconnect khong tu dong resume, phai bam lai). Nguoi
+// that DANG MAT KET NOI khong the bam "San sang" (dang offline) nen khong tinh vao dieu kien
+// cho nay - nguoc lai neu tinh se bi "block" vi khong bao gio nguoi do san sang duoc, lam ca
+// phong ket vinh vien. Khi nguoi do connect lai (joinRoom set connected=true) thi lai phai
+// bam "San sang" nhu moi nguoi dang ket noi khac.
+function allConnectedHumansReady(room) {
+  return room.seats.every((s, idx) => {
+    if (!s || s.type === 'bot') return true;
+    if (!s.connected) return true; // offline khong the bam - khong khoa resume
+    return room.ready.has(idx); // connected human phai bam "San sang"
+  });
+}
+
+// Goi sau moi thay doi luot: xu ly vong lap bot va dem nguoc luot nguoi. Khi 1 van ket thuc
+// (round-over), DUNG LAI cho nguoi choi bam "Tiep tuc" (event 'continue') moi sang van moi -
+// khong con tu dong chuyen sau 1 khoang delay nhu truoc.
 function afterTurnChange(roomId) {
   const room = rooms.getRoom(roomId);
   if (!room || !room.game || room.paused) return;
@@ -63,15 +78,7 @@ function afterTurnChange(roomId) {
   if (room.game.status === 'round-over') {
     room.turnDeadline = null;
     broadcastRoom(roomId);
-    if (room.status === 'match-over') return; // cho nguoi choi bam "Choi lai"
-    setTimeout(() => {
-      const r2 = rooms.getRoom(roomId);
-      if (!r2 || r2.status === 'match-over' || r2.paused) return;
-      game.startRound(r2);
-      broadcastRoom(roomId);
-      afterTurnChange(roomId);
-    }, NEXT_ROUND_DELAY_MS);
-    return;
+    return; // cho nguoi choi bam "Tiep tuc" (hoac "Choi lai" neu match-over)
   }
 
   if (game.isBotTurn(room)) {
@@ -188,6 +195,8 @@ io.on('connection', (socket) => {
   });
 
   // Tam dung: bat ky nguoi choi nao trong phong cung bam duoc, dung dong ho + dung bot tu danh.
+  // Reset danh sach "san sang" - moi lan tam dung la 1 phien moi, ai cung phai bam lai du
+  // khong phai nguyen nhan gay tam dung.
   socket.on('pause', () => {
     const { roomId, token } = socket.data;
     const room = rooms.getRoom(roomId);
@@ -195,18 +204,42 @@ io.on('connection', (socket) => {
     if (rooms.findSeatByToken(room, token) === -1) return;
 
     room.paused = true;
+    room.ready = new Set();
     clearTurnTimer(room);
     room.turnDeadline = null;
     broadcastRoom(roomId);
   });
 
-  socket.on('resume', () => {
+  // San sang: danh dau rieng ghe cua nguoi gui. Chi tu dong tiep tuc khi TAT CA nguoi that
+  // dang ket noi deu da san sang (bot va nguoi dang mat ket noi khong tinh vao dieu kien nay
+  // theo 2 huong nguoc nhau - xem allConnectedHumansReady).
+  socket.on('ready', () => {
     const { roomId, token } = socket.data;
     const room = rooms.getRoom(roomId);
     if (!room || !room.paused) return;
+    const seat = rooms.findSeatByToken(room, token);
+    if (seat === -1) return;
+
+    room.ready.add(seat);
+    if (allConnectedHumansReady(room)) {
+      room.paused = false;
+      room.ready = new Set();
+      broadcastRoom(roomId);
+      afterTurnChange(roomId);
+    } else {
+      broadcastRoom(roomId);
+    }
+  });
+
+  // Tiep tuc sang van moi sau khi 1 van ket thuc (round-over) - bat ky ai trong phong cung
+  // bam duoc, giong cach "rematch" hoat dong.
+  socket.on('continue', () => {
+    const { roomId, token } = socket.data;
+    const room = rooms.getRoom(roomId);
+    if (!room || !room.game || room.game.status !== 'round-over' || room.status === 'match-over' || room.paused) return;
     if (rooms.findSeatByToken(room, token) === -1) return;
 
-    room.paused = false;
+    game.startRound(room);
     broadcastRoom(roomId);
     afterTurnChange(roomId);
   });
@@ -225,12 +258,21 @@ io.on('connection', (socket) => {
     afterTurnChange(roomId);
   });
 
+  // Mat ket noi (rot mang/dong tab): tu dong tam dung ca phong neu dang choi do dang, giong
+  // nhu co nguoi chu dong bam "Tam dung" - tranh 3 nguoi con lai (hoac bot) tiep tuc choi/het
+  // gio tu danh thay trong luc 1 nguoi khong con o do.
   socket.on('disconnect', () => {
     const { roomId, token } = socket.data;
     if (!roomId || !token) return;
     const room = rooms.getRoom(roomId);
     if (!room) return;
-    rooms.markDisconnected(room, token);
+    const wasConnected = rooms.markDisconnected(room, token);
+    if (wasConnected && room.game && room.game.status === 'playing' && !room.paused) {
+      room.paused = true;
+      room.ready = new Set();
+      clearTurnTimer(room);
+      room.turnDeadline = null;
+    }
     broadcastRoom(roomId);
   });
 });

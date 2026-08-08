@@ -9,6 +9,15 @@
     6: [0, 2, 3, 5, 6, 8],
   };
 
+  // Ket qua cuoi van co 2 dang tuy mode: mode 'score' tra { winnerSeats, points }, mode 'block'
+  // tra { ranking: [{seat, rank, points, pip}] } (nguoi hang nhat = "thang" van do). Ham nay
+  // chuan hoa ve 1 danh sach seat "thang" de dung chung cho am thanh/hien thi.
+  function getWinnerSeats(result) {
+    if (!result) return [];
+    if (result.ranking) return result.ranking.filter((r) => r.rank === 1).map((r) => r.seat);
+    return result.winnerSeats || [];
+  }
+
   // ---------- Am thanh (Web Audio, tu tao tieng, khong can file ngoai) ----------
   const SoundFX = (() => {
     let ctx = null;
@@ -181,33 +190,17 @@
       drawBtn: document.getElementById('draw-btn'),
       passBtn: document.getElementById('pass-btn'),
       pauseBtn: document.getElementById('pause-btn'),
-      sideChoicePopup: document.getElementById('side-choice-popup'),
-      sideChoiceLeft: document.getElementById('side-choice-left'),
-      sideChoiceRight: document.getElementById('side-choice-right'),
       resultOverlay: document.getElementById('result-overlay'),
       resultText: document.getElementById('result-text'),
+      resultRanking: document.getElementById('result-ranking'),
+      continueBtn: document.getElementById('continue-btn'),
       rematchBtn: document.getElementById('rematch-btn'),
       toast: document.getElementById('toast'),
     };
 
-    function openSideChoice(handIndex, moves) {
-      const leftMove = moves.find((m) => m.side === 'left');
-      const rightMove = moves.find((m) => m.side === 'right');
-      els.sideChoiceLeft.style.display = leftMove ? 'inline-block' : 'none';
-      els.sideChoiceRight.style.display = rightMove ? 'inline-block' : 'none';
-      // gan lai onclick (khong dung addEventListener) de khong bao gio cong don handler cu
-      els.sideChoiceLeft.onclick = () => {
-        els.sideChoicePopup.style.display = 'none';
-        SoundFX.play('place');
-        socket.emit('play', { handIndex, side: 'left' });
-      };
-      els.sideChoiceRight.onclick = () => {
-        els.sideChoicePopup.style.display = 'none';
-        SoundFX.play('place');
-        socket.emit('play', { handIndex, side: 'right' });
-      };
-      els.sideChoicePopup.style.display = 'flex';
-    }
+    // Quan dang cho chon noi vao dau A hay B (khi 1 quan noi duoc ca 2 dau va 2 dau khac so) -
+    // thay vi popup rieng, nguoi choi bam THANG vao nhan A/B tren ban (xem renderSnakeBoard).
+    let pendingSideChoice = null;
 
     function updateSoundIcon() {
       els.soundToggle.textContent = SoundFX.isMuted() ? '🔇' : '🔊';
@@ -234,8 +227,11 @@
     els.passBtn.addEventListener('click', () => { SoundFX.play('pass'); socket.emit('pass'); });
     els.drawBtn.addEventListener('click', () => { SoundFX.play('draw'); socket.emit('draw'); });
     els.rematchBtn.addEventListener('click', () => socket.emit('rematch'));
+    els.continueBtn.addEventListener('click', () => socket.emit('continue'));
     els.pauseBtn.addEventListener('click', () => {
-      socket.emit(lastState && lastState.paused ? 'resume' : 'pause');
+      // Dang tam dung: bam la tu danh dau "san sang" (khong tu tiep tuc ngay, phai cho
+      // het nguoi that dang ket noi deu san sang). Chua tam dung: bam la tam dung ca phong.
+      socket.emit(lastState && lastState.paused ? 'ready' : 'pause');
     });
 
     // Canh bao khi roi trang luc dang choi dang do - khong chan duoc 100% nhung nhac truoc.
@@ -334,7 +330,7 @@
         SoundFX.play('yourTurn');
       }
       if (state.lastResult && (!lastState.lastResult || JSON.stringify(state.lastResult) !== JSON.stringify(lastState.lastResult))) {
-        const iWon = state.lastResult.winnerSeats.includes(state.yourSeat);
+        const iWon = getWinnerSeats(state.lastResult).includes(state.yourSeat);
         SoundFX.play(iWon ? 'roundWin' : 'roundLose');
       }
       if (state.status === 'match-over' && lastState.status !== 'match-over') {
@@ -668,6 +664,18 @@
         badge.textContent = label;
         badge.style.left = `${(tip.x - minX) * finalScale}px`;
         badge.style.top = `${(tip.y - minY) * finalScale}px`;
+        // Khi nguoi choi dang chon noi vao dau nao (1 quan noi duoc ca 2 dau va dau khac nhau),
+        // bam truc tiep vao nhan A/B tren ban de danh quan do vao dau tuong ung - thay cho popup.
+        if (pendingSideChoice) {
+          badge.classList.add('clickable');
+          badge.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const choice = pendingSideChoice;
+            pendingSideChoice = null;
+            SoundFX.play('place');
+            socket.emit('play', { handIndex: choice.handIndex, side: label === 'A' ? 'left' : 'right' });
+          });
+        }
         els.board.appendChild(badge);
       });
 
@@ -677,7 +685,7 @@
     }
 
     // 1 muc gon trong hang doi thu - chi chu, khong logo/avatar
-    function makeOpponentItem(s, isTurn, scoreVal) {
+    function makeOpponentItem(s, isTurn, scoreVal, showReady, isReady) {
       const item = document.createElement('div');
       item.className = 'opponent-item' + (isTurn ? ' turn' : '') + (s.name ? '' : ' empty');
       if (!s.name) {
@@ -687,6 +695,12 @@
       const nameEl = document.createElement('span');
       nameEl.className = 'opp-name';
       nameEl.textContent = `${s.name}${s.connected ? '' : ' (mất kết nối)'}`;
+      if (showReady) {
+        const readyEl = document.createElement('span');
+        readyEl.className = 'ready-dot ' + (isReady ? 'on' : 'off');
+        readyEl.title = isReady ? 'Đã sẵn sàng' : 'Chưa sẵn sàng';
+        nameEl.appendChild(readyEl);
+      }
       const scoreEl = document.createElement('span');
       scoreEl.className = 'opp-score';
       scoreEl.textContent = `${scoreVal} điểm`;
@@ -741,7 +755,11 @@
       [seatByRel[1], seatByRel[2], seatByRel[3]].forEach((s) => {
         const info = s || {};
         const scoreVal = s ? scoreList[s.idx] : 0;
-        els.opponentsRow.appendChild(makeOpponentItem(info, !!(s && state.turnSeat === s.idx), scoreVal));
+        // Khi dang tam dung, hien chot trang thai "san sang" cho tung doi thu (bot luon on).
+        const isTurn = !!(s && state.turnSeat === s.idx);
+        const showReady = !!(s && s.name && state.paused);
+        const isReady = !!(s && state.ready && state.ready[s.idx]);
+        els.opponentsRow.appendChild(makeOpponentItem(info, isTurn, scoreVal, showReady, isReady));
       });
 
       // Ban co - xep xoan oc trong khung that cua ban, uu tien khong gian toi da
@@ -760,9 +778,14 @@
       }
       els.turnIndicator.textContent = els.turnIndicator.dataset.base;
 
-      // Nut tam dung: bat ky ai cung bam duoc trong luc dang choi (khong phai luc cho van moi/het tran)
+      // Nut tam dung / san sang: bat ky ai cung bam duoc trong luc dang choi (khong phai luc
+      // cho van moi/het tran). Dang tam dung thi nut chuyen thanh "San sang" - nguoi cung co
+      // the bam lai de huy san sang cua minh; gan phong tu tiep tuc khi MOI nguoi that dang
+      // ket noi deu san sang (duoi xu ly cua server).
       els.pauseBtn.style.display = state.roundPlaying ? 'inline-block' : 'none';
-      els.pauseBtn.textContent = state.paused ? '▶ Tiếp tục' : '⏸ Tạm dừng';
+      els.pauseBtn.textContent = state.paused
+        ? (state.ready && state.ready[state.yourSeat] ? '✅ Đã sẵn sàng' : '✅ Sẵn sàng')
+        : '⏸ Tạm dừng';
 
       // O ban than
       const isMyTurn = state.yourSeat !== -1 && state.turnSeat === state.yourSeat && state.roundPlaying && !state.paused;
@@ -779,7 +802,6 @@
       // Bai tren tay - xep dung, keo tha de sap xep lai
       const orderedHand = reconcileHandOrder(state.yourHand);
       els.hand.innerHTML = '';
-      els.sideChoicePopup.style.display = 'none'; // bai duoc dung lai moi luot render - dong popup cu (neu co)
       let dragFromIdx = null;
 
       orderedHand.forEach((tile, displayIdx) => {
@@ -799,6 +821,11 @@
           if (dragFromIdx !== null) reorderHand(dragFromIdx, displayIdx);
         });
 
+        // Khi dang chon A/B, to sang quan cua ban dang chon de nguoi choi biet phai bam vao
+        // nhan A/B tren ban (khong bam lai quan nay duoc).
+        if (pendingSideChoice && pendingSideChoice.handIndex === handIndex) {
+          el.classList.add('pick-pending');
+        }
         if (isMyTurn && movesForTile.length > 0) {
           el.classList.add('playable');
           el.addEventListener('click', () => {
@@ -810,7 +837,10 @@
               const side = movesForTile.length === 1 ? movesForTile[0].side : 'right';
               socket.emit('play', { handIndex, side });
             } else {
-              openSideChoice(handIndex, movesForTile);
+              // Quan danh duoc vao ca 2 dau khac nhau: cho phep bam truc tiep vao nhan A/B
+              // tren ban de chon dau (danh dau pendingSideChoice, renderSnakeBoard lam A/B clickable).
+              pendingSideChoice = { handIndex, moves: movesForTile };
+              render(state);
             }
           });
         } else {
@@ -828,7 +858,39 @@
       els.stockCounter.style.display = isDrawVariant ? 'inline-block' : 'none';
       if (isDrawVariant) els.stockCounter.textContent = `Nọc: ${state.stockCount}`;
 
-      // Ket qua van / tran
+      // Ket qua van / tran: hien bang tong ket (xep hang tung van + diem tich luy) va nut
+      // "Tiep tuc" de bat dau van moi - ap dung cho MOI bien the va ca 2 mode (block va score).
+      // Match ket thuc: van giu bang tong ket ma khong cho "Tiep tuc" nua, chi con "Choi lai".
+      const renderResultRanking = (r) => {
+        els.resultRanking.innerHTML = '';
+        const rows = r.ranking || [];
+        if (rows.length === 0) {
+          const empty = document.createElement('p');
+          empty.className = 'result-ranking-note';
+          empty.textContent = '(không có bảng xếp hạng)';
+          els.resultRanking.appendChild(empty);
+          return;
+        }
+        const header = document.createElement('div');
+        header.className = 'ranking-row ranking-head';
+        header.innerHTML = '<span>Vị trí</span><span>Người chơi</span><span>Điểm tay</span><span>+/-</span><span>Tổng</span>';
+        els.resultRanking.appendChild(header);
+        const totalBySeat = state.scores;
+        rows.forEach((row) => {
+          const seat = state.seats[row.seat];
+          const name = (seat && seat.name) || `Ghế ${row.seat + 1}`;
+          const rowEl = document.createElement('div');
+          rowEl.className = 'ranking-row';
+          rowEl.innerHTML =
+            `<span class="rank">${row.rank}</span>` +
+            `<span>${name}</span>` +
+            `<span>${row.pip != null ? row.pip : '—'}</span>` +
+            `<span class="${row.points > 0 ? 'pos' : row.points < 0 ? 'neg' : ''}">${row.points > 0 ? '+' : ''}${row.points}</span>` +
+            `<span>${totalBySeat[row.seat] != null ? totalBySeat[row.seat] : 0}</span>`;
+          els.resultRanking.appendChild(rowEl);
+        });
+      };
+
       if (state.status === 'match-over') {
         const scores = state.mode === 'score' ? state.scores : state.roundWins;
         const maxVal = Math.max(...scores);
@@ -836,14 +898,24 @@
         const winnerNames = winners.map((s) => s.name).join(', ');
         els.resultText.textContent = `Kết thúc trận đấu!\nNgười thắng: ${winnerNames}`;
         els.resultOverlay.style.display = 'flex';
+        els.continueBtn.style.display = 'none';
         els.rematchBtn.style.display = 'inline-block';
+        if (state.lastResult) renderResultRanking(state.lastResult);
       } else if (state.lastResult) {
         const r = state.lastResult;
-        const names = r.winnerSeats.map((i) => (state.seats[i].name || `Ghế ${i + 1}`)).join(', ');
-        const reasonText = r.reason === 'domino' ? 'hết bài trước' : r.reason === 'blocked-tie' ? 'bị chặn, hòa điểm' : 'bị chặn (thấp điểm nhất)';
-        els.resultText.textContent = `Ván này: ${names || 'Hòa'} thắng (${reasonText})${r.points ? ', +' + r.points + ' điểm' : ''}`;
+        // Mode 'block': van luon ket thuc dung xep hang theo diem tay (+2/+1/-1/-2), khong
+        // tach rieng ly do "het bai" hay "bi chan" - chi gioi thieu bang tong ket. Mode 'score'
+        // van dung uy quyen reason ben server.
+        els.resultText.textContent = state.mode === 'block'
+          ? `Ván này kết thúc. Bấm Tiếp tục để sang ván mới.`
+          : ((rr) => {
+              const reasonText = rr.reason === 'domino' ? 'hết bài trước' : rr.reason === 'blocked-tie' ? 'bị chặn, hòa điểm' : 'bị chặn (thấp điểm nhất)';
+              return `Ván này: ${rr.winnerSeats.length ? rr.winnerSeats.map((i) => (state.seats[i].name || `Ghế ${i + 1}`)).join(', ') : 'Hòa'} thắng (${reasonText})${rr.points ? ', +' + rr.points + ' điểm' : ''}`;
+            })(r);
         els.resultOverlay.style.display = 'flex';
+        els.continueBtn.style.display = 'inline-block';
         els.rematchBtn.style.display = 'none';
+        renderResultRanking(r);
       } else {
         els.resultOverlay.style.display = 'none';
       }

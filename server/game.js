@@ -21,6 +21,7 @@ function startRound(room) {
     board: [],
     ends: null,
     turnSeat: startSeat,
+    startSeat, // ghe di dau tien van nay - dung lam tie-break xep hang mode 'block' khi hoa diem
     passStreak: 0,
     memory: bot.createMemory(NUM_SEATS),
     history: [],
@@ -70,8 +71,14 @@ function applyPlayInternal(room, seat, move) {
   game.history.push({ seat, action: 'play', tile: move.tile, bonus: bonus || undefined });
 
   if (game.hands[seat].length === 0) {
-    const opts = room.variant === 'bergen' ? { fixedPoints: engine.BERGEN_POINTS.domino } : {};
-    finishRound(room, engine.resolveWinByEmptyHand(seat, game.hands, opts));
+    if (room.mode === 'block') {
+      // Mode 'block' dung xep hang (+2/+1/-1/-2) cho MOI ly do ket thuc van, ke ca het bai
+      // truoc - nguoi het bai luon co 0 diem tay nen chac chan hang nhat theo cong thuc chung.
+      finishRound(room, engine.resolveBlockRanking(game.hands, game.startSeat));
+    } else {
+      const opts = room.variant === 'bergen' ? { fixedPoints: engine.BERGEN_POINTS.domino } : {};
+      finishRound(room, engine.resolveWinByEmptyHand(seat, game.hands, opts));
+    }
     return;
   }
   game.turnSeat = nextSeat(seat);
@@ -84,8 +91,12 @@ function applyPassInternal(room, seat) {
   game.passStreak += 1;
 
   if (game.passStreak >= NUM_SEATS) {
-    const opts = room.variant === 'bergen' ? { fixedPoints: engine.BERGEN_POINTS.blocked } : {};
-    finishRound(room, engine.resolveBlockedRound(game.hands, opts));
+    if (room.mode === 'block') {
+      finishRound(room, engine.resolveBlockRanking(game.hands, game.startSeat));
+    } else {
+      const opts = room.variant === 'bergen' ? { fixedPoints: engine.BERGEN_POINTS.blocked } : {};
+      finishRound(room, engine.resolveBlockedRound(game.hands, opts));
+    }
     return;
   }
   game.turnSeat = nextSeat(seat);
@@ -124,10 +135,15 @@ function finishRound(room, result) {
       room.status = 'match-over';
     }
   } else {
-    // mode 'block': moi van thang tinh 1 tran, ai thang du so tran truoc thi thang chung cuoc
-    result.winnerSeats.forEach((s) => {
-      room.roundWins[s] += 1;
+    // mode 'block': cong diem rieng cho tung ghe theo hang (+2/+1/-1/-2, tich luy vao
+    // room.scores de hien bang tong ket). Tieu chi thang chung cuoc van giu nguyen dang
+    // dung truoc gio (dem so van hang nhat vao roundWins, du matchWins van hang nhat thi
+    // thang tran) - khong doi cau truc phong tao (van chon "so tran thang").
+    result.ranking.forEach(({ seat, points }) => {
+      room.scores[seat] += points;
     });
+    const firstPlace = result.ranking.find((r) => r.rank === 1);
+    room.roundWins[firstPlace.seat] += 1;
     if (room.roundWins.some((w) => w >= room.matchWins)) {
       room.status = 'match-over';
     }
@@ -214,6 +230,8 @@ function buildPublicState(room, viewerToken) {
     matchWins: room.matchWins,
     status: room.status,
     paused: !!room.paused,
+    // Ai da bam "San sang" trong luc dang tam dung (bot luon coi la san sang, khong can bam).
+    ready: room.seats.map((s, idx) => !s || s.type === 'bot' || (room.ready && room.ready.has(idx))),
     roundPlaying: !!(game && game.status === 'playing'),
     scores: room.scores,
     roundWins: room.roundWins,

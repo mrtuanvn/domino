@@ -28,6 +28,7 @@ function createRoom({ mode = 'block', targetScore = 100, matchWins = 3, variant 
     createdAt: Date.now(),
     status: 'lobby', // lobby | playing | match-over
     paused: false,
+    ready: new Set(), // seat index da bam "San sang" trong luc dang tam dung - reset moi lan pause moi
   };
   rooms.set(id, room);
   return room;
@@ -56,11 +57,15 @@ function joinRoom(room, token, name) {
   return emptyIdx;
 }
 
+// Tra ve true neu thuc su co 1 nguoi (human) vua chuyen sang mat ket noi - de index.js
+// quyet dinh co can tu dong tam dung phong hay khong.
 function markDisconnected(room, token) {
   const idx = findSeatByToken(room, token);
-  if (idx !== -1 && room.seats[idx].type === 'human') {
+  if (idx !== -1 && room.seats[idx].type === 'human' && room.seats[idx].connected) {
     room.seats[idx].connected = false;
+    return true;
   }
+  return false;
 }
 
 function fillBotSeats(room) {

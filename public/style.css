@@ -139,6 +139,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .opponent-item .opp-score { display: block; color: #ffd479; }
 .opponent-item.turn { background: rgba(212,160,23,0.35); color: #fff; }
 .opponent-item.empty { opacity: 0.5; }
+/* Cham trang thai "san sang" ngo canh ten doi thu khi phong dang tam dung (trong .opp-name) */
+.opponent-item .ready-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  margin-left: 4px; vertical-align: middle;
+}
+.opponent-item .ready-dot.on { background: #2e9c4a; box-shadow: 0 0 4px #2e9c4a; }
+.opponent-item .ready-dot.off { background: #b3261e; box-shadow: 0 0 3px #b3261e; }
 
 .seat-avatar {
   width: 26px; height: 26px; border-radius: 50%;
@@ -181,6 +188,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 0 0 2px rgba(0,0,0,.35); pointer-events: none; z-index: 5;
 }
+/* Khi dang chon A/B (chuan bi danh quan vao dau): nhan A/B tren ban trong suc bam duoc,
+   sang mau dan noi bat va pho to chut de nguoi choi nho bam vao do. */
+.chain-end-badge.clickable {
+  pointer-events: auto; cursor: pointer; background: #2e9c4a;
+  color: #fff; width: 26px; height: 26px; font-size: 13px;
+  z-index: 9; box-shadow: 0 0 0 3px rgba(46,156,74,.85), 0 0 12px 4px rgba(46,156,74,.6);
+  animation: badge-pulse 1s ease-in-out infinite;
+}
+@keyframes badge-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.18); }
+}
+}
 
 .domino-tile {
   display: flex; background: #fdfdfa; border: 1.5px solid #222; border-radius: 6px;
@@ -213,6 +233,24 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .result-box p { white-space: pre-line; font-size: 15px; }
 
+/* Bang tong ket tung van (xep hang 1-4, diem tay, +- diem so, diem tich luy) */
+.result-ranking { margin: 12px 0 4px; font-size: 12px; }
+.result-ranking-note { color: #888; font-size: 12px; margin: 6px 0; }
+.ranking-row {
+  display: grid; grid-template-columns: 38px 1fr 52px 40px 40px;
+  gap: 4px; align-items: center; padding: 4px 6px; border-bottom: 1px solid #eee;
+}
+.ranking-row:last-child { border-bottom: none; }
+.ranking-head {
+  font-weight: 700; font-size: 11px; color: #666;
+  background: #f4f4f4; border-radius: 6px; padding: 5px 6px;
+}
+.ranking-row .rank { font-weight: 800; }
+.ranking-row:nth-child(n+3) .rank { color: #666; } /* noi dung: hang 1 nghia la dau */
+.ranking-row .pos { color: #1e7a3a; font-weight: 800; }
+.ranking-row .neg { color: #c0392b; font-weight: 800; }
+#continue-btn { margin-top: 12px; }
+
 /* ---------- Bai tren tay (nguoi choi, o duoi cung) ---------- */
 .hand-area {
   flex-shrink: 0; margin-top: 6px; display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -230,6 +268,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .hand-tile .half { width: 30px; height: 30px; }
 .hand-tile.playable { border-color: var(--accent); border-width: 2px; box-shadow: 0 0 0 2px rgba(212,160,23,0.5); }
 .hand-tile.playable:hover { transform: translateY(-4px); }
+/* Quan dang chon noi vao dau nao (A/B): to sang de goi y bam vao nhan xanh tren ban */
+.hand-tile.pick-pending {
+  border-color: #2e9c4a; border-width: 3px; opacity: 1;
+  box-shadow: 0 0 0 3px rgba(46,156,74,0.85), 0 0 12px 4px rgba(46,156,74,0.5);
+}
 .hand-tile.disabled { opacity: 0.55; cursor: default; }
 .hand-tile.dragging { opacity: 0.35; }
 .hand-tile.drag-over { box-shadow: 0 0 0 3px #fff; }
