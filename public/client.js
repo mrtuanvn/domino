@@ -802,9 +802,13 @@
         if (isMyTurn && movesForTile.length > 0) {
           el.classList.add('playable');
           el.addEventListener('click', () => {
-            if (movesForTile.length === 1) {
+            // 2 dau bang deu cung 1 so (VD ca A lan B deu la 6): danh vao dau nao cung
+            // nhu nhau ve mat luat choi, khong can hoi - mac dinh noi vao dau B (right).
+            const sameEnds = state.ends && state.ends.left === state.ends.right;
+            if (movesForTile.length === 1 || sameEnds) {
               SoundFX.play('place');
-              socket.emit('play', { handIndex, side: movesForTile[0].side });
+              const side = movesForTile.length === 1 ? movesForTile[0].side : 'right';
+              socket.emit('play', { handIndex, side });
             } else {
               openSideChoice(handIndex, movesForTile);
             }
